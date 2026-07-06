@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reset datos locales</title>
+<style>
+body{background:#0C0D0F;color:#E8EAF0;font-family:-apple-system,sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+h1{font-size:20px;margin-bottom:16px}
+p{color:#888ea0;margin-bottom:24px;font-size:14px}
+button{background:#F5A623;color:#000;border:none;border-radius:12px;padding:16px 24px;font-size:16px;font-weight:800;cursor:pointer}
+#status{margin-top:20px;font-size:14px;color:#4ADE80}
+</style>
+</head>
+<body>
+<h1>Limpiar datos guardados en este navegador</h1>
+<p>Esto borra el historial editado localmente (sueldos, gastos ingresados a mano en julio) para que la app vuelva a cargar todo desde el archivo publicado. Úsalo solo si el dashboard muestra datos desactualizados.</p>
+<button id="btn">Limpiar y volver al dashboard</button>
+<div id="status"></div>
+<script>
+document.getElementById('btn').addEventListener('click', function(){
+  localStorage.clear();
+  document.getElementById('status').textContent = 'Listo. Redirigiendo...';
+  setTimeout(function(){ location.href = 'gastos_app.html'; }, 800);
+});
+</script>
+</body>
+</html>
