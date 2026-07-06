@@ -1946,9 +1946,8 @@ function cerrarAtajo() {
 
 // Configuración — se guarda en localStorage
 let SHEETS_CFG = lsGet('sheets_cfg', {
-  sheet_id: '',       // ID del Google Sheet (de la URL)
-  api_key:  '',       // API Key pública de Google
-  activo:   false,
+  script_url: 'https://script.google.com/macros/s/AKfycbwmvbI8DkfNzp_8Clb248cK51X-ib3-_EHvti3j_K1mtdfMYqYYDwMQHWyFtyQqCN-Z3A/exec',
+  activo:   true,
 });
 
 let liveInterval = null;
@@ -1975,99 +1974,29 @@ function renderSheetsConfig() {
       <div style="font-size:12px;font-weight:700;margin-bottom:12px;color:var(--text)">🔑 Configuración</div>
 
       <div style="margin-bottom:12px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase">ID del Google Sheet</div>
-        <input id="cfg-sheet-id" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-          value="${cfg.sheet_id}"
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase">URL del Apps Script</div>
+        <input id="cfg-script-url" type="text" placeholder="https://script.google.com/macros/s/XXXX/exec"
+          value="${cfg.script_url}"
           style="width:100%;background:var(--bg);border:1px solid var(--bdr2);border-radius:8px;
             padding:9px 12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none">
-        <div style="font-size:10px;color:var(--muted);margin-top:4px">Lo encuentras en la URL: docs.google.com/spreadsheets/d/<strong style="color:var(--T)">ESTE_ID</strong>/edit</div>
-      </div>
-
-      <div style="margin-bottom:12px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase">API Key de Google</div>
-        <input id="cfg-api-key" type="text" placeholder="AIzaSy..."
-          value="${cfg.api_key}"
-          style="width:100%;background:var(--bg);border:1px solid var(--bdr2);border-radius:8px;
-            padding:9px 12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none">
-        <div style="font-size:10px;color:var(--muted);margin-top:4px">
-          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--G)">console.cloud.google.com</a> → Credenciales → Crear API Key → Restringir a Sheets API
-        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Es la misma URL que usa el formulario del celu (gasto_form.html). No requiere API Key.</div>
       </div>
 
       <button onclick="guardarCfgSheets()" class="btn btn-p" style="width:100%">Guardar y conectar</button>
     </div>
 
     <div style="background:var(--card2);border:1px solid var(--bdr);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:12px;color:var(--text)">📋 Cómo configurar el Google Sheet y el Atajo</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:12px;color:var(--text)">📱 Cómo funciona</div>
       <div style="font-size:11px;color:var(--muted);line-height:1.9">
-        <strong style="color:var(--text)">1. Crea el Google Sheet:</strong><br>
-        &nbsp;&nbsp;• Abre Google Sheets → Nuevo → nómbralo "Gastos Felipe"<br>
-        &nbsp;&nbsp;• En la fila 1 escribe estos headers exactos:<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;<code style="background:var(--bg);padding:1px 6px;border-radius:4px;color:var(--G)">fecha | descripcion | monto | tarjeta | persona | cuotas | categoria</code><br>
-        &nbsp;&nbsp;• Comparte el Sheet como <strong style="color:var(--text)">"Cualquier persona con el enlace puede ver"</strong><br><br>
-
-        <strong style="color:var(--text)">2. Crea el Atajo en iPhone:</strong><br>
-        &nbsp;&nbsp;• App <strong>Atajos</strong> → + → Nuevo Atajo<br>
-        &nbsp;&nbsp;• Agrega estas acciones:<br>
-        <div style="background:var(--bg);border-radius:8px;padding:10px;margin:6px 0;line-height:2;font-size:10px">
-          📅 <strong>Fecha actual</strong> → Formato YYYY-MM-DD → guardar como <em>fecha</em><br>
-          📝 <strong>Pedir entrada</strong> "¿Cuánto? ($)" → guardar como <em>monto</em><br>
-          📝 <strong>Pedir entrada</strong> "¿Dónde?" → guardar como <em>descripcion</em><br>
-          📋 <strong>Elegir de lista</strong> [Santander, Banco de Chile, Scotiabank, Ripley, CMR, Cencosud] → <em>tarjeta</em><br>
-          📋 <strong>Elegir de lista</strong> [Felipe, Fran, Casa] → <em>persona</em><br>
-          📋 <strong>Elegir de lista</strong> [1/1, 1/3, 2/3, 3/3, 1/6, 2/6, 3/6, 1/8, 2/8, 1/12, 2/12, mensual] → <em>cuotas</em><br>
-          🌐 <strong>Obtener contenido de URL</strong> (método POST):<br>
-          &nbsp;&nbsp;URL: <code style="color:var(--G)">https://script.google.com/macros/s/TU_SCRIPT_ID/exec</code><br>
-          &nbsp;&nbsp;Cuerpo: fecha,descripcion,monto,tarjeta,persona,cuotas
-        </div>
-        &nbsp;&nbsp;• Nómbralo <strong style="color:var(--text)">"💰 Gasto"</strong> y ponlo en pantalla de inicio<br><br>
-
-        <strong style="color:var(--text)">3. Crea el Google Apps Script (para recibir del iPhone):</strong><br>
-        &nbsp;&nbsp;• En tu Sheet → Extensiones → Apps Script<br>
-        &nbsp;&nbsp;• Pega el código que está más abajo → Guardar → Implementar → Web app<br>
-        &nbsp;&nbsp;• Copia la URL del script y ponla en el Atajo
+        Ingresas un gasto desde <strong style="color:var(--text)">gasto_form.html</strong> en tu celu → se guarda en la planilla de Google Sheets → este dashboard la consulta cada 30 segundos vía el mismo Apps Script (sin necesidad de API Key de Google Cloud).
       </div>
-    </div>
-
-    <div style="background:var(--card2);border:1px solid var(--bdr);border-radius:10px;padding:16px;margin-top:12px">
-      <div style="font-size:11px;font-weight:700;margin-bottom:8px;color:var(--text)">📄 Código del Apps Script (copia y pega)</div>
-      <pre style="background:var(--bg);border-radius:8px;padding:12px;font-size:10px;color:var(--G);
-        overflow-x:auto;line-height:1.6;border:1px solid var(--bdr)">function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet()
-    .getSheetByName('Gastos') || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
-  
-  const body = e.postData.contents.split(',');
-  const [fecha, descripcion, monto, tarjeta, persona, cuotas] = body;
-  
-  // Categorización automática
-  const desc = (descripcion||'').toLowerCase();
-  const cats = [
-    ['Supermercado',['sisa','tottus','jumbo','unimarc','lider','walmart']],
-    ['Auto / Transporte',['bencina','tag','uber','parking','copec']],
-    ['Restaurantes',['niusushi','melt','restaurante','disco','mcdonalds','sushi']],
-    ['Salud',['farmacia','clinica','integramedica','vidakine']],
-    ['Belleza',['carisma','peluqueria','aseo']],
-    ['Ropa',['paris','falabella','asics','pandora','zara']],
-    ['Entretenimiento',['cine','ke personajes','sodimac']],
-    ['Suscripciones',['spotify','netflix','apple','canva']],
-  ];
-  let categoria = 'Otros';
-  for (const [cat, keys] of cats) {
-    if (keys.some(k => desc.includes(k))) { categoria = cat; break; }
-  }
-  
-  sheet.appendRow([fecha, descripcion, monto, tarjeta, persona, cuotas, categoria]);
-  
-  return ContentService.createTextOutput('OK');
-}</pre>
     </div>`;
 }
 
 function guardarCfgSheets() {
-  const sheet_id = document.getElementById('cfg-sheet-id').value.trim();
-  const api_key  = document.getElementById('cfg-api-key').value.trim();
-  if (!sheet_id || !api_key) { toast('Completa los dos campos','warn'); return; }
-  SHEETS_CFG = {sheet_id, api_key, activo: true};
+  const script_url = document.getElementById('cfg-script-url').value.trim();
+  if (!script_url) { toast('Completa la URL','warn'); return; }
+  SHEETS_CFG = {script_url, activo: true};
   lsSave('sheets_cfg', SHEETS_CFG);
   cerrarSheets();
   iniciarLive();
@@ -2075,11 +2004,10 @@ function guardarCfgSheets() {
 }
 
 async function fetchSheets() {
-  const {sheet_id, api_key} = SHEETS_CFG;
-  if (!sheet_id || !api_key) return null;
+  const {script_url} = SHEETS_CFG;
+  if (!script_url) return null;
 
-  // Leer hoja "Gastos" (o Sheet1)
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheet_id}/values/Gastos!A:G?key=${api_key}`;
+  const url = script_url;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
@@ -2233,7 +2161,7 @@ function cargarDesdeSheets() {
 }
 
 // Auto-iniciar si ya estaba configurado
-if (SHEETS_CFG.activo && SHEETS_CFG.sheet_id && SHEETS_CFG.api_key) {
+if (SHEETS_CFG.activo && SHEETS_CFG.script_url) {
   setTimeout(iniciarLive, 1500);
 }
 
