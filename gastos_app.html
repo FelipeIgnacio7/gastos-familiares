@@ -2020,7 +2020,7 @@ async function fetchSheets() {
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const get = (key) => row[headers.indexOf(key)] || '';
-      const monto = parseInt((get('monto')||'0').replace(/\D/g,'')) || 0;
+      const monto = parseInt(String(get('monto')||'0').replace(/\D/g,'')) || 0;
       if (!monto) continue;
       items.push({
         fecha:      get('fecha'),
