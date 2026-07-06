@@ -20,14 +20,12 @@ h1 em{color:var(--F);font-style:normal}
 .label{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);
   text-transform:uppercase;margin-bottom:8px}
 
-/* MONTO */
 .monto-box{background:var(--card);border:1px solid var(--bdr);border-radius:16px;
   padding:20px;text-align:center;margin-bottom:20px}
 .monto-input{background:none;border:none;color:var(--text);font-size:42px;font-weight:800;
   width:100%;text-align:center;font-family:'DM Mono',monospace;outline:none}
 .monto-input::placeholder{color:var(--muted)}
 
-/* CHIPS */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{flex:1 1 auto;min-width:80px;background:var(--card);border:1px solid var(--bdr);
   border-radius:12px;padding:14px 10px;text-align:center;font-size:14px;font-weight:700;
@@ -35,7 +33,6 @@ h1 em{color:var(--F);font-style:normal}
 .chip.on{background:var(--F);color:#000;border-color:var(--F)}
 .chip:active{transform:scale(.96)}
 
-/* CUOTAS */
 .cuotas-row{display:flex;align-items:center;gap:12px;background:var(--card);
   border:1px solid var(--bdr);border-radius:12px;padding:10px 16px}
 .cuotas-row .label{margin:0;flex:1}
@@ -44,13 +41,11 @@ h1 em{color:var(--F);font-style:normal}
   border:1px solid var(--bdr2);color:var(--text);font-size:18px;font-weight:700;cursor:pointer}
 .step-val{font-family:'DM Mono',monospace;font-size:16px;font-weight:600;min-width:20px;text-align:center}
 
-/* TIENDA INPUT */
 .text-input{width:100%;background:var(--card);border:1px solid var(--bdr);border-radius:12px;
   padding:14px 16px;color:var(--text);font-size:15px;outline:none}
 .text-input:focus{border-color:var(--bdr2)}
 .text-input::placeholder{color:var(--muted)}
 
-/* SUBMIT */
 .submit-btn{margin-top:8px;background:var(--F);color:#000;border:none;border-radius:14px;
   padding:18px;font-size:16px;font-weight:800;cursor:pointer;transition:.15s}
 .submit-btn:active{transform:scale(.98)}
@@ -120,62 +115,62 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwb2jFD3gMwrPtyUG2kW
 
 let tarjeta = null, persona = null, cuotas = 1;
 
-document.querySelectorAll('#chips-tarjeta .chip').forEach(c=>{
-  c.addEventListener('click', ()=>{
-    document.querySelectorAll('#chips-tarjeta .chip').forEach(x=>x.classList.remove('on'));
+document.querySelectorAll('#chips-tarjeta .chip').forEach(function(c){
+  c.addEventListener('click', function(){
+    document.querySelectorAll('#chips-tarjeta .chip').forEach(function(x){ x.classList.remove('on'); });
     c.classList.add('on');
     tarjeta = c.dataset.v;
   });
 });
 
-document.querySelectorAll('#chips-persona .chip').forEach(c=>{
-  c.addEventListener('click', ()=>{
-    document.querySelectorAll('#chips-persona .chip').forEach(x=>x.classList.remove('on'));
+document.querySelectorAll('#chips-persona .chip').forEach(function(c){
+  c.addEventListener('click', function(){
+    document.querySelectorAll('#chips-persona .chip').forEach(function(x){ x.classList.remove('on'); });
     c.classList.add('on');
     persona = c.dataset.v;
   });
 });
 
-const cuotasVal = document.getElementById('cuotas-val');
-document.getElementById('cuotas-mas').addEventListener('click', ()=>{
+var cuotasVal = document.getElementById('cuotas-val');
+document.getElementById('cuotas-mas').addEventListener('click', function(){
   cuotas = Math.min(cuotas+1, 48);
   cuotasVal.textContent = cuotas;
 });
-document.getElementById('cuotas-menos').addEventListener('click', ()=>{
+document.getElementById('cuotas-menos').addEventListener('click', function(){
   cuotas = Math.max(cuotas-1, 1);
   cuotasVal.textContent = cuotas;
 });
 
 function showToast(msg, type){
-  const t = document.getElementById('toast');
+  var t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show ' + type;
-  setTimeout(()=> t.className = 'toast', 2200);
+  setTimeout(function(){ t.className = 'toast'; }, 2200);
 }
 
 function resetForm(){
   document.getElementById('monto').value = '';
   document.getElementById('tienda').value = '';
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('on'); });
   tarjeta = null; persona = null; cuotas = 1;
   cuotasVal.textContent = '1';
   document.getElementById('monto').focus();
 }
 
-document.getElementById('submit').addEventListener('click', async ()=>{
-  const monto = document.getElementById('monto').value;
-  const tienda = document.getElementById('tienda').value.trim();
+document.getElementById('submit').addEventListener('click', function(){
+  var monto = document.getElementById('monto').value;
+  var tienda = document.getElementById('tienda').value.trim();
 
   if(!monto || Number(monto) <= 0){ showToast('Falta el monto', 'err'); return; }
   if(!tienda){ showToast('Falta la tienda', 'err'); return; }
   if(!tarjeta){ showToast('Elige una tarjeta', 'err'); return; }
   if(!persona){ showToast('Elige una persona', 'err'); return; }
 
-  const btn = document.getElementById('submit');
+  var btn = document.getElementById('submit');
   btn.disabled = true;
   btn.textContent = 'Guardando...';
 
-  const payload = {
+  var payload = {
     fecha: new Date().toISOString().slice(0,10),
     monto: Number(monto),
     tienda: tienda,
@@ -184,9 +179,21 @@ document.getElementById('submit').addEventListener('click', async ()=>{
     cuotas: cuotas
   };
 
-  try{
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify(payload)
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  }).then(function(){
+    showToast('Gasto guardado ✓', 'ok');
+    resetForm();
+  }).catch(function(){
+    showToast('Error al guardar', 'err');
+  }).finally(function(){
+    btn.disabled = false;
+    btn.textContent = 'Guardar gasto';
+  });
+});
+</script>
+</body>
+</html>
