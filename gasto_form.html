@@ -80,8 +80,11 @@ h1 em{color:var(--F);font-style:normal}
 <div class="section">
   <div class="label">Tarjeta</div>
   <div class="chips" id="chips-tarjeta">
-    <div class="chip" data-v="Crédito Felipe">Créd. Felipe</div>
-    <div class="chip" data-v="Crédito Francisca">Créd. Fran</div>
+    <div class="chip" data-v="Banco de Chile">Banco de Chile</div>
+    <div class="chip" data-v="Santander">Santander</div>
+    <div class="chip" data-v="Scotiabank">Scotiabank</div>
+    <div class="chip" data-v="Ripley">Ripley</div>
+    <div class="chip" data-v="CMR Falabella">CMR Falabella</div>
     <div class="chip" data-v="Débito">Débito</div>
     <div class="chip" data-v="Efectivo">Efectivo</div>
   </div>
@@ -189,13 +192,4 @@ document.getElementById('submit').addEventListener('click', async ()=>{
     });
     showToast('Gasto guardado ✓', 'ok');
     resetForm();
-  }catch(err){
-    showToast('Error al guardar', 'err');
-  }finally{
-    btn.disabled = false;
-    btn.textContent = 'Guardar gasto';
-  }
-});
-</script>
-</body>
-</html>
+  }c
