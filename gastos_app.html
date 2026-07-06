@@ -799,6 +799,7 @@ function updateHSidebar(){
   clearTimeout(window._saveTimer);
   window._saveTimer=setTimeout(()=>{
     try{lsSave('ing_current',collectING());showSaveIndicator();}catch(e){}
+    try{ pushMesToSheet(collectING()); }catch(e){}
     // Actualizar HIST en tiempo real con datos del formulario
     const sf_live  = parseFloat(document.getElementById('is-f')?.value)||0;
     const sfr_live = parseFloat(document.getElementById('is-fr')?.value)||0;
@@ -2082,6 +2083,9 @@ async function actualizarLive() {
 
   liveData = mesKey ? items.filter(i => i.fecha.startsWith(mesKey)) : items;
 
+  // Fusionar automáticamente los gastos nuevos de tarjeta (sin duplicar)
+  mergeTarjetasDesdeSheet(liveData);
+
   // Totales por persona
   const totF  = liveData.filter(i=>i.persona==='Felipe').reduce((s,i)=>s+i.monto,0);
   const totFr = liveData.filter(i=>i.persona==='Fran').reduce((s,i)=>s+i.monto,0);
@@ -2132,32 +2136,94 @@ function cerrarLive() {
 
 function cargarDesdeSheets() {
   if (!liveData.length) { toast('No hay datos para cargar','warn'); return; }
-  let n = 0;
-  const TAR_NAMES = ['Santander','Banco de Chile','Scotiabank','Ripley','CMR Falabella','Scot. Cencosud'];
+  const n = mergeTarjetasDesdeSheet(liveData);
+  if (n > 0) {
+    toast(`✓ ${n} gastos nuevos cargados desde Google Sheets`, 'ok');
+  } else {
+    toast('Ya estaba todo al día — no hay gastos nuevos', 'ok');
+  }
+}
 
-  // Agrupar por tarjeta y persona
-  liveData.forEach(item => {
-    const persona = item.persona;
-    const tar = item.tarjeta;
-    const c = TAR_COLORS[tar] || '#888';
+// ═══════════════════════════════════════════════════
+// SYNC BIDIRECCIONAL CON GOOGLE SHEETS (multi-dispositivo)
+// ═══════════════════════════════════════════════════
 
-    if (persona === 'Felipe') {
-      const el = document.getElementById('rows-f');
-      if (el) { el.appendChild(makeRow({desc:item.desc, monto:item.monto, cuotas:item.cuotas},'var(--F)','f')); n++; }
-    } else if (persona === 'Fran') {
-      const el = document.getElementById('rows-fr');
-      if (el) { el.appendChild(makeRow({desc:item.desc, monto:item.monto, cuotas:item.cuotas},'var(--Fr)','fr')); n++; }
-    } else if (persona === 'Casa') {
-      const el = document.getElementById('rows-h');
-      if (el) { el.appendChild(makeRow({desc:item.desc, monto:item.monto, cuotas:item.cuotas},'var(--H)','h')); n++; }
-    } else if (TAR_NAMES.includes(tar)) {
-      const tbody = document.querySelector(`.tar-rows[data-tr="${tar}"]`);
-      if (tbody) { tbody.appendChild(makeTarRow({desc:item.desc,monto:item.monto,cuotas:item.cuotas},c,tar)); n++; }
+// Envía sueldos + gastos personales + casa + usd a la pestaña "MesActual" de la Sheet
+let _pushMesTimer = null;
+function pushMesToSheet(ingData) {
+  const {script_url} = SHEETS_CFG;
+  if (!script_url) return;
+  clearTimeout(_pushMesTimer);
+  _pushMesTimer = setTimeout(() => {
+    fetch(script_url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'save_mes',
+        mes: ingData.mes,
+        sueldo_felipe: ingData.sf,
+        sueldo_fran: ingData.sfr,
+        felipe: ingData.felipe,
+        fran: ingData.fran,
+        casa: ingData.casa,
+        usd: ingData.usd,
+      })
+    }).catch(()=>{});
+  }, 600);
+}
+
+// Al cargar la página: si la Sheet tiene datos guardados para el mes actual, usarlos
+// (la Sheet es la fuente de verdad para que todos los dispositivos vean lo mismo)
+async function syncMesFromSheet() {
+  const {script_url} = SHEETS_CFG;
+  if (!script_url) return;
+  try {
+    const res = await fetch(script_url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const meses = data.meses || {};
+    const mesActual = ING.mes;
+    const remoto = meses[mesActual];
+    if (remoto) {
+      ING.sf = remoto.sueldo_felipe || ING.sf;
+      ING.sfr = remoto.sueldo_fran || ING.sfr;
+      if (remoto.felipe && remoto.felipe.length) ING.felipe = remoto.felipe;
+      if (remoto.fran && remoto.fran.length) ING.fran = remoto.fran;
+      if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
+      if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
+      lsSave('ing_current', ING);
+      buildIngreso();
+      toast('✓ Datos cargados desde Google Sheets (compartidos)', 'ok');
     }
-  });
+  } catch(e) { /* silencioso */ }
+}
 
-  recalc();
-  toast(`✓ ${n} gastos cargados desde Google Sheets`, 'ok');
+// Fusiona gastos de tarjeta nuevos desde la Sheet, evitando duplicados
+function claveGasto_(item) {
+  return [item.fecha, item.desc, item.monto, item.tarjeta].join('|');
+}
+
+function mergeTarjetasDesdeSheet(items) {
+  const yaVistos = new Set(lsGet('sheet_loaded_keys', []));
+  let nuevos = 0;
+  items.forEach(item => {
+    const key = claveGasto_(item);
+    if (yaVistos.has(key)) return;
+    yaVistos.add(key);
+    const tar = item.tarjeta;
+    if (!tar) return;
+    if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
+    ING.tarjetas[tar].push({desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1'});
+    nuevos++;
+  });
+  if (nuevos > 0) {
+    lsSave('sheet_loaded_keys', [...yaVistos]);
+    lsSave('ing_current', collectING.length ? ING : ING); // ING ya mutado arriba
+    buildTarSecs();
+    recalc();
+  }
+  return nuevos;
 }
 
 // Auto-iniciar si ya estaba configurado
@@ -2202,6 +2268,7 @@ if (saved && saved.mes && ABR26.mes && saved.mes !== ABR26.mes) {
 
 buildIngreso();
 initModo();
+setTimeout(syncMesFromSheet, 800);
 </script>
 
 <div id="fintoc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center">
