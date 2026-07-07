@@ -1155,6 +1155,17 @@ function recalc(){
   dfe.textContent=(dif_f>=0?'+':'')+fmt(dif_f); dfe.style.color=dif_f>=0?'var(--G)':'var(--R)';
   const dfre=document.getElementById('ap-dif-fr');
   dfre.textContent=(dif_fr>=0?'+':'')+fmt(dif_fr); dfre.style.color=dif_fr>=0?'var(--G)':'var(--R)';
+
+  // Autoguardado real: local + Google Sheets (debounced)
+  clearTimeout(window._recalcSaveTimer);
+  window._recalcSaveTimer = setTimeout(() => {
+    try {
+      const snap = collectING();
+      lsSave('ing_current', snap);
+      showSaveIndicator();
+      pushMesToSheet(snap);
+    } catch(e) {}
+  }, 900);
 }
 
 function sumSec(id){let s=0;document.querySelectorAll('#'+id+' .mono-inp').forEach(i=>s+=parseFloat(i.value)||0);return s;}
@@ -1398,8 +1409,10 @@ function exportarHTML() {
 }
 
 function guardar(){
-  lsSave('ing_current',collectING());
-  toast('✓ Guardado en este navegador','ok');
+  const snap = collectING();
+  lsSave('ing_current', snap);
+  pushMesToSheet(snap);
+  toast('✓ Guardado (este navegador + Google Sheets)','ok');
 }
 
 function showSaveIndicator(){
