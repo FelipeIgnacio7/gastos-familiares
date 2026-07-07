@@ -1214,16 +1214,21 @@ function recalc(){
   const dfre=document.getElementById('ap-dif-fr');
   dfre.textContent=(dif_fr>=0?'+':'')+fmt(dif_fr); dfre.style.color=dif_fr>=0?'var(--G)':'var(--R)';
 
-  // Autoguardado real: local + Google Sheets (debounced)
-  clearTimeout(window._recalcSaveTimer);
-  window._recalcSaveTimer = setTimeout(() => {
-    try {
-      const snap = collectING();
-      lsSave('ing_current', snap);
-      showSaveIndicator();
-      pushMesToSheet(snap);
-    } catch(e) {}
-  }, 900);
+  // Autoguardado real: local + Google Sheets (debounced).
+  // Se omite mientras estamos solo RENDERIZANDO datos que llegaron de la Sheet
+  // (carga inicial), para no alcanzar a pisarlos con un guardado prematuro
+  // antes de que terminen de llegar (pasa sobre todo con internet lento/celular).
+  if (!window._cargandoDatos) {
+    clearTimeout(window._recalcSaveTimer);
+    window._recalcSaveTimer = setTimeout(() => {
+      try {
+        const snap = collectING();
+        lsSave('ing_current', snap);
+        showSaveIndicator();
+        pushMesToSheet(snap);
+      } catch(e) {}
+    }, 900);
+  }
 }
 
 function sumSec(id){let s=0;document.querySelectorAll('#'+id+' .mono-inp').forEach(i=>s+=parseFloat(i.value)||0);return s;}
@@ -2264,6 +2269,7 @@ async function syncMesFromSheet() {
       if (remoto.fran && remoto.fran.length) ING.fran = remoto.fran;
       if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
       if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
+      window._cargandoDatos = true;
       lsSave('ing_current', ING);
       buildIngreso();
       toast('✓ Datos cargados desde Google Sheets (compartidos)', 'ok');
@@ -2310,7 +2316,7 @@ function mergeTarjetasDesdeSheet(items) {
     if (huboPersonal) {
       renderRows('f', ING.felipe, 'var(--F)');
       renderRows('fr', ING.fran, 'var(--Fr)');
-      pushMesToSheet(collectING());
+      if (!window._cargandoDatos) pushMesToSheet(collectING());
     }
     recalc();
   }
@@ -2356,10 +2362,13 @@ if (saved && saved.mes && ABR26.mes && saved.mes !== ABR26.mes) {
   }
 }
 
+window._cargandoDatos = true;
 buildIngreso();
 initModo();
+window._cargandoDatos = false;
 setTimeout(() => {
   syncMesFromSheet().finally(() => {
+    window._cargandoDatos = false;
     if (SHEETS_CFG.activo && SHEETS_CFG.script_url) {
       setTimeout(iniciarLive, 300);
     }
