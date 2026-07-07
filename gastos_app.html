@@ -565,7 +565,7 @@ const TEMPLATE_ING = {
   tarjetas:{'Santander':[],'Banco de Chile':[],'Scotiabank':[],'Ripley':[],'CMR Falabella':[],'Scot. Cencosud':[]},
   usd:[],
 };
-const ABR26 = {"mes": "Julio 2026", "sf": 0, "sfr": 0, "felipe": [{"desc": "Almacenamiento Apple (Traspaso Internacional)", "monto": 3492, "cuotas": "mensual"}, {"desc": "Aseo", "monto": 60000, "cuotas": "mensual"}, {"desc": "Cuota Iphone", "monto": 76433, "cuotas": "2/12"}, {"desc": "Entel", "monto": 23908, "cuotas": "mensual"}, {"desc": "Devolución Gastos Luna De Miel", "monto": 166667, "cuotas": "5/6"}, {"desc": "Pandora", "monto": 19167, "cuotas": "6/6"}, {"desc": "Seguro Auto", "monto": 42922, "cuotas": "mensual"}, {"desc": "Bath And Body", "monto": 6167, "cuotas": "6/6"}, {"desc": "Regalo Ddm", "monto": 13330, "cuotas": "2/3"}, {"desc": "Regalo Ddp", "monto": 10328, "cuotas": "2/3"}], "fran": [{"desc": "Canva", "monto": 7900, "cuotas": "mensual"}, {"desc": "Seguro Dental (Bupa)", "monto": 15484, "cuotas": "mensual"}, {"desc": "Peluqueria", "monto": 35000, "cuotas": "3/3"}, {"desc": "Integramedica", "monto": 31477, "cuotas": "3/3"}, {"desc": "Devolución Gastos Luna De Miel", "monto": 166667, "cuotas": "5/6"}, {"desc": "Vidakine", "monto": 16667, "cuotas": "8/12"}, {"desc": "Bath And Body", "monto": 6167, "cuotas": "6/6"}, {"desc": "Regalo Ddm", "monto": 13330, "cuotas": "2/3"}, {"desc": "Regalo Ddp", "monto": 23330, "cuotas": "2/3"}], "casa": [{"desc": "Arriendo", "monto": 665000, "cuotas": "1/1"}, {"desc": "GGCC", "monto": 98789, "cuotas": "1/1"}, {"desc": "Luz", "monto": 66830, "cuotas": "1/1"}, {"desc": "Agua", "monto": 21390, "cuotas": "1/1"}, {"desc": "Gas", "monto": 29085, "cuotas": "1/1"}, {"desc": "Internet", "monto": 25000, "cuotas": "1/1"}, {"desc": "TAG autopista", "monto": 121209, "cuotas": "1/1"}], "tarjetas": {"Santander": [], "Banco de Chile": [{"desc": "Fabrics Funda Plumon", "monto": 12928, "cuotas": "2/3"}, {"desc": "Show Hablando Webadas", "monto": 20317, "cuotas": "3/3"}], "Scotiabank": [], "Ripley": [], "CMR Falabella": [], "Scot. Cencosud": [{"desc": "Calientacamas Sindelen", "monto": 18993, "cuotas": "2/3"}]}, "usd": []};
+const ABR26 = {"mes": "Julio 2026", "sf": 0, "sfr": 0, "felipe": [{"desc": "Almacenamiento Apple (Traspaso Internacional)", "monto": 3492, "cuotas": "mensual"}, {"desc": "Aseo", "monto": 60000, "cuotas": "mensual"}, {"desc": "Cuota Iphone", "monto": 76433, "cuotas": "2/12"}, {"desc": "Entel", "monto": 23908, "cuotas": "mensual"}, {"desc": "Devolución Gastos Luna De Miel", "monto": 166667, "cuotas": "5/6"}, {"desc": "Pandora", "monto": 19167, "cuotas": "6/6"}, {"desc": "Seguro Auto", "monto": 42922, "cuotas": "mensual"}, {"desc": "Bath And Body", "monto": 6167, "cuotas": "6/6"}, {"desc": "Regalo Ddm", "monto": 13330, "cuotas": "2/3"}, {"desc": "Regalo Ddp", "monto": 10328, "cuotas": "2/3"}], "fran": [{"desc": "Canva", "monto": 7900, "cuotas": "mensual"}, {"desc": "Seguro Dental (Bupa)", "monto": 15484, "cuotas": "mensual"}, {"desc": "Peluqueria", "monto": 35000, "cuotas": "3/3"}, {"desc": "Integramedica", "monto": 31477, "cuotas": "3/3"}, {"desc": "Devolución Gastos Luna De Miel", "monto": 166667, "cuotas": "5/6"}, {"desc": "Vidakine", "monto": 16667, "cuotas": "8/12"}, {"desc": "Bath And Body", "monto": 6167, "cuotas": "6/6"}, {"desc": "Regalo Ddm", "monto": 13330, "cuotas": "2/3"}, {"desc": "Regalo Ddp", "monto": 23330, "cuotas": "2/3"}], "casa": [{"desc": "Arriendo", "monto": 665000, "cuotas": "1/1"}, {"desc": "GGCC", "monto": 98789, "cuotas": "1/1"}, {"desc": "Luz", "monto": 66830, "cuotas": "1/1"}, {"desc": "Agua", "monto": 21390, "cuotas": "1/1"}, {"desc": "Gas", "monto": 29085, "cuotas": "1/1"}, {"desc": "Internet", "monto": 25000, "cuotas": "1/1"}, {"desc": "TAG autopista", "monto": 121209, "cuotas": "1/1"}], "tarjetas": {"Santander": [], "Banco de Chile": [], "Scotiabank": [], "Ripley": [], "CMR Falabella": [], "Scot. Cencosud": [{"desc": "Calientacamas Sindelen", "monto": 18993, "cuotas": "2/3"}]}, "usd": []};
 // Cargar desde localStorage si existe, si no usar Abril 2026 como punto de partida
 let ING = lsGet('ing_current', JSON.parse(JSON.stringify(ABR26)));
 
@@ -1062,11 +1062,31 @@ function buildTarSecs(){
 function makeTarRow(item,color,name){
   const div=document.createElement('div'); div.className='erow'; div.style.gridTemplateColumns='1fr 120px 70px 28px';
   div.dataset.tr=name;
+  div.dataset.fecha=item.fecha||'';
   div.innerHTML=`<input type="text" placeholder="Descripción…" value="${item.desc||''}" oninput="updTarSub('${name}')">
     <input type="number" class="mono-inp tar-m" placeholder="0" value="${item.monto||''}" oninput="updTarSub('${name}')" style="color:${color}">
     <input type="text" class="cuota-inp" placeholder="1/1" value="${item.cuotas||'1/1'}">
-    <button class="del" onclick="this.closest('.erow').remove();updTarSub('${name}')">×</button>`;
+    <button class="del" onclick="borrarTarRow(this,'${name}')">×</button>`;
   return div;
+}
+
+// Borra la fila y, si ya estaba sincronizada con la Sheet, la borra tambien alla
+function borrarTarRow(btn, name){
+  const row = btn.closest('.erow');
+  const {script_url} = SHEETS_CFG;
+  if (script_url && row.dataset.synced === '1' && row.dataset.fecha) {
+    const inputs = row.querySelectorAll('input');
+    const desc = inputs[0]?.value?.trim();
+    const monto = parseFloat(inputs[1]?.value) || 0;
+    fetch(script_url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({action:'delete_gasto', fecha: row.dataset.fecha, tienda: desc, monto, tarjeta: name})
+    }).catch(()=>{});
+  }
+  row.remove();
+  updTarSub(name);
 }
 
 function addTarRow(name,color){
@@ -2263,7 +2283,7 @@ function mergeTarjetasDesdeSheet(items) {
     const key = claveGasto_(item);
     if (yaVistos.has(key)) return;
     yaVistos.add(key);
-    const nuevoItem = {desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1'};
+    const nuevoItem = {desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1', fecha: item.fecha};
     // Si la persona es Felipe o Fran, es un gasto PERSONAL (no del pozo común de tarjetas),
     // aunque se haya pagado con una tarjeta — va a su sección propia.
     if (item.persona === 'Felipe') {
