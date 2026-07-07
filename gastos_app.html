@@ -1050,7 +1050,11 @@ function buildTarSecs(){
         <div class="add-row" style="--nc:${color}" onclick="addTarRow('${name}','${color}')">Agregar</div>
       </div>`;
     const tbody=sec.querySelector('.tar-rows');
-    items.forEach(item=>tbody.appendChild(makeTarRow(item,color,name)));
+    items.forEach(item=>{
+      const row = makeTarRow(item,color,name);
+      row.dataset.synced = '1'; // ya existente (archivo o carga previa) — no reenviar
+      tbody.appendChild(row);
+    });
     el.appendChild(sec);
   });
 }
@@ -1067,7 +1071,9 @@ function makeTarRow(item,color,name){
 
 function addTarRow(name,color){
   const tbody=document.querySelector(`.tar-rows[data-tr="${name}"]`);
-  const row=makeTarRow({cuotas:'1/1'},color,name); tbody.appendChild(row);
+  const row=makeTarRow({cuotas:'1/1'},color,name);
+  row.dataset.synced = ''; // fila nueva, aún no está en la Sheet
+  tbody.appendChild(row);
   row.querySelector('input').focus(); recalc();
 }
 
@@ -1090,19 +1096,16 @@ function scheduleSyncTarjetaRows(name) {
 function syncTarjetaRowsToSheet(name) {
   const {script_url} = SHEETS_CFG;
   if (!script_url) return;
-  const yaVistos = new Set(lsGet('sheet_loaded_keys', []));
-  const rows = document.querySelectorAll(`.tar-rows[data-tr="${name}"] .erow`);
   const hoy = new Date().toISOString().slice(0,10);
+  const rows = document.querySelectorAll(`.tar-rows[data-tr="${name}"] .erow`);
   rows.forEach(row => {
+    if (row.dataset.synced === '1') return; // ya estaba en la Sheet, no volver a subir
     const inputs = row.querySelectorAll('input');
     const desc = inputs[0]?.value?.trim();
     const monto = parseFloat(inputs[1]?.value) || 0;
     const cuotas = inputs[2]?.value || '1/1';
-    if (!desc || !monto) return;
-    const item = {fecha: hoy, desc, monto, tarjeta: name};
-    const key = claveGasto_(item);
-    if (yaVistos.has(key)) return; // ya está en la Sheet, no duplicar
-    yaVistos.add(key);
+    if (!desc || !monto) return; // fila todavía incompleta, esperar a que termine de escribir
+    row.dataset.synced = '1';
     fetch(script_url, {
       method: 'POST',
       mode: 'no-cors',
@@ -1110,7 +1113,6 @@ function syncTarjetaRowsToSheet(name) {
       body: JSON.stringify({action:'add_gasto', fecha: hoy, tienda: desc, monto, tarjeta: name, persona: 'Común', cuotas})
     }).catch(()=>{});
   });
-  lsSave('sheet_loaded_keys', [...yaVistos]);
 }
 
 function renderUSDRows(){
