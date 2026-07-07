@@ -1126,6 +1126,7 @@ function syncTarjetaRowsToSheet(name) {
     const cuotas = inputs[2]?.value || '1/1';
     if (!desc || !monto) return; // fila todavía incompleta, esperar a que termine de escribir
     row.dataset.synced = '1';
+    row.dataset.fecha = hoy;
     fetch(script_url, {
       method: 'POST',
       mode: 'no-cors',
