@@ -2258,20 +2258,39 @@ function claveGasto_(item) {
 function mergeTarjetasDesdeSheet(items) {
   const yaVistos = new Set(lsGet('sheet_loaded_keys', []));
   let nuevos = 0;
+  let huboPersonal = false;
   items.forEach(item => {
     const key = claveGasto_(item);
     if (yaVistos.has(key)) return;
     yaVistos.add(key);
-    const tar = item.tarjeta;
-    if (!tar) return;
-    if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
-    ING.tarjetas[tar].push({desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1'});
+    const nuevoItem = {desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1'};
+    // Si la persona es Felipe o Fran, es un gasto PERSONAL (no del pozo común de tarjetas),
+    // aunque se haya pagado con una tarjeta — va a su sección propia.
+    if (item.persona === 'Felipe') {
+      ING.felipe = ING.felipe || [];
+      ING.felipe.push(nuevoItem);
+      huboPersonal = true;
+    } else if (item.persona === 'Fran') {
+      ING.fran = ING.fran || [];
+      ING.fran.push(nuevoItem);
+      huboPersonal = true;
+    } else {
+      const tar = item.tarjeta;
+      if (!tar) return;
+      if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
+      ING.tarjetas[tar].push(nuevoItem);
+    }
     nuevos++;
   });
   if (nuevos > 0) {
     lsSave('sheet_loaded_keys', [...yaVistos]);
-    lsSave('ing_current', collectING.length ? ING : ING); // ING ya mutado arriba
+    lsSave('ing_current', ING);
     buildTarSecs();
+    if (huboPersonal) {
+      renderRows('f', ING.felipe, 'var(--F)');
+      renderRows('fr', ING.fran, 'var(--Fr)');
+      pushMesToSheet(collectING());
+    }
     recalc();
   }
   return nuevos;
