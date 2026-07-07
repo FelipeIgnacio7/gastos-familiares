@@ -2317,10 +2317,9 @@ function mergeTarjetasDesdeSheet(items) {
   return nuevos;
 }
 
-// Auto-iniciar si ya estaba configurado
-if (SHEETS_CFG.activo && SHEETS_CFG.script_url) {
-  setTimeout(iniciarLive, 1500);
-}
+// (el auto-inicio de "en vivo" se hace mas abajo, DESPUES de sincronizar
+// sueldos/gastos personales, para evitar una condicion de carrera que
+// sobreescribia los sueldos con $0 en conexiones lentas)
 
 // ═══════════════════════════════════════════════════
 // INIT
@@ -2359,7 +2358,13 @@ if (saved && saved.mes && ABR26.mes && saved.mes !== ABR26.mes) {
 
 buildIngreso();
 initModo();
-setTimeout(syncMesFromSheet, 800);
+setTimeout(() => {
+  syncMesFromSheet().finally(() => {
+    if (SHEETS_CFG.activo && SHEETS_CFG.script_url) {
+      setTimeout(iniciarLive, 300);
+    }
+  });
+}, 400);
 </script>
 
 <div id="fintoc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center">
