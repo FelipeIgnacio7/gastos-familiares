@@ -2184,7 +2184,8 @@ async function syncMesFromSheet() {
     const data = await res.json();
     const meses = data.meses || {};
     const mesActual = ING.mes;
-    const remoto = meses[mesActual];
+    const mesKeyMatch = Object.keys(meses).find(k => k.toLowerCase() === (mesActual||'').toLowerCase());
+    const remoto = mesKeyMatch ? meses[mesKeyMatch] : null;
     if (remoto) {
       ING.sf = remoto.sueldo_felipe || ING.sf;
       ING.sfr = remoto.sueldo_fran || ING.sfr;
