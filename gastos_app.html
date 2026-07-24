@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 2;
+const APP_VERSION = 3;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2236,12 +2236,12 @@ function cerrarLive() {
 
 function cargarDesdeSheets() {
   if (!liveData.length) { toast('No hay datos para cargar','warn'); return; }
-  const n = mergeTarjetasDesdeSheet(liveData);
-  if (n > 0) {
-    toast(`✓ ${n} gastos nuevos cargados desde Google Sheets`, 'ok');
-  } else {
-    toast('Ya estaba todo al día — no hay gastos nuevos', 'ok');
-  }
+  const {nuevos, corregidos} = mergeTarjetasDesdeSheet(liveData);
+  const partes = [];
+  if (nuevos > 0)    partes.push(`${nuevos} gasto${nuevos===1?'':'s'} nuevo${nuevos===1?'':'s'}`);
+  if (corregidos > 0) partes.push(`${corregidos} cuota${corregidos===1?'':'s'} actualizada${corregidos===1?'':'s'}`);
+  toast(partes.length ? `✓ ${partes.join(' y ')} desde Google Sheets`
+                      : 'Ya estaba todo al día', 'ok');
 }
 
 // ═══════════════════════════════════════════════════
@@ -2328,45 +2328,57 @@ function claveGasto_(item) {
 // CADA navegador, así que un dispositivo nuevo lo tenía vacío y volvía a importar
 // gastos que ya venían dentro de los datos del mes → aparecían duplicados (había
 // items repetidos 2, 3 y hasta 4 veces). Comparar contra la lista real evita eso.
-function yaEnLista_(lista, it) {
-  return (lista || []).some(x =>
+function buscarEnLista_(lista, it) {
+  return (lista || []).find(x =>
     x.desc === it.desc &&
     Number(x.monto) === Number(it.monto) &&
     (!x.fecha || !it.fecha || x.fecha === it.fecha)
-  );
+  ) || null;
 }
 
 function mergeTarjetasDesdeSheet(items) {
   const yaVistos = new Set(lsGet('sheet_loaded_keys', []));
   let nuevos = 0;
+  let corregidos = 0;
   let huboPersonal = false;
   items.forEach(item => {
     const key = claveGasto_(item);
-    if (yaVistos.has(key)) return;
-    yaVistos.add(key);
     const nuevoItem = {desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1', fecha: item.fecha};
     // Si la persona es Felipe o Fran, es un gasto PERSONAL (no del pozo común de tarjetas),
     // aunque se haya pagado con una tarjeta — va a su sección propia.
-    if (item.persona === 'Felipe') {
-      ING.felipe = ING.felipe || [];
-      if (yaEnLista_(ING.felipe, nuevoItem)) return;
-      ING.felipe.push(nuevoItem);
-      huboPersonal = true;
-    } else if (item.persona === 'Fran') {
-      ING.fran = ING.fran || [];
-      if (yaEnLista_(ING.fran, nuevoItem)) return;
-      ING.fran.push(nuevoItem);
-      huboPersonal = true;
-    } else {
+    const esPersonal = item.persona === 'Felipe' || item.persona === 'Fran';
+    let destino;
+    if (item.persona === 'Felipe')      destino = (ING.felipe = ING.felipe || []);
+    else if (item.persona === 'Fran')   destino = (ING.fran = ING.fran || []);
+    else {
       const tar = item.tarjeta;
       if (!tar) return;
-      if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
-      if (yaEnLista_(ING.tarjetas[tar], nuevoItem)) return;
-      ING.tarjetas[tar].push(nuevoItem);
+      destino = (ING.tarjetas[tar] = ING.tarjetas[tar] || []);
     }
+
+    const existente = buscarEnLista_(destino, nuevoItem);
+    if (existente) {
+      // La Sheet es la fuente de verdad: si allá se corrigieron las cuotas
+      // (p.ej. "6" → "1/6"), hay que reflejarlo acá. Antes esto no pasaba nunca,
+      // porque el gasto ya estaba marcado como importado y no se volvía a mirar,
+      // así que las correcciones hechas en la Sheet no llegaban a la app.
+      if (nuevoItem.cuotas && existente.cuotas !== nuevoItem.cuotas) {
+        existente.cuotas = nuevoItem.cuotas;
+        corregidos++;
+        if (esPersonal) huboPersonal = true;
+      }
+      yaVistos.add(key);
+      return;
+    }
+
+    // Ya se importó antes y hoy no está en la lista → el usuario lo borró a mano.
+    if (yaVistos.has(key)) return;
+    yaVistos.add(key);
+    destino.push(nuevoItem);
+    if (esPersonal) huboPersonal = true;
     nuevos++;
   });
-  if (nuevos > 0) {
+  if (nuevos > 0 || corregidos > 0) {
     lsSave('sheet_loaded_keys', [...yaVistos]);
     lsSave('ing_current', ING);
     buildTarSecs();
@@ -2377,7 +2389,7 @@ function mergeTarjetasDesdeSheet(items) {
     }
     recalc();
   }
-  return nuevos;
+  return {nuevos, corregidos};
 }
 
 // (el auto-inicio de "en vivo" se hace mas abajo, DESPUES de sincronizar
