@@ -22,7 +22,8 @@ button{background:#F5A623;color:#000;border:none;border-radius:12px;padding:16px
 document.getElementById('btn').addEventListener('click', function(){
   localStorage.clear();
   document.getElementById('status').textContent = 'Listo. Redirigiendo...';
-  setTimeout(function(){ location.href = 'gastos_app.html'; }, 800);
+  // ?v= evita que el navegador (sobre todo en el celular) sirva el HTML cacheado
+  setTimeout(function(){ location.href = 'gastos_app.html?v=' + Date.now(); }, 800);
 });
 </script>
 </body>

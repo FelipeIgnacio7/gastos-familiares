@@ -3,7 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Gastos Familiares</title>
+<script>
+// Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
+// el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
+// Subir APP_VERSION y version.txt juntos en cada cambio publicado.
+const APP_VERSION = 2;
+(function(){
+  try{
+    if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
+    fetch('version.txt?t=' + Date.now(), {cache:'no-store'})
+      .then(r => r.ok ? r.text() : null)
+      .then(t => {
+        const remota = parseInt((t||'').trim(), 10);
+        if(remota && remota > APP_VERSION){
+          location.replace(location.pathname + '?v=' + remota);
+        }
+      }).catch(()=>{});
+  }catch(e){}
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -799,7 +821,9 @@ function updateHSidebar(){
   clearTimeout(window._saveTimer);
   window._saveTimer=setTimeout(()=>{
     try{lsSave('ing_current',collectING());showSaveIndicator();}catch(e){}
-    try{ pushMesToSheet(collectING()); }catch(e){}
+    // Igual que el otro autosave: no empujar mientras se están renderizando
+    // datos recién llegados de la Sheet (antes este camino no lo chequeaba).
+    if(!window._cargandoDatos){ try{ pushMesToSheet(collectING()); }catch(e){} }
     // Actualizar HIST en tiempo real con datos del formulario
     const sf_live  = parseFloat(document.getElementById('is-f')?.value)||0;
     const sfr_live = parseFloat(document.getElementById('is-fr')?.value)||0;
@@ -2229,6 +2253,17 @@ let _pushMesTimer = null;
 function pushMesToSheet(ingData) {
   const {script_url} = SHEETS_CFG;
   if (!script_url) return;
+  // CANDADO CRÍTICO: no escribir NUNCA en la Sheet antes de haber terminado de
+  // leerla. Sin esto, un dispositivo con datos locales vacíos o viejos (típico:
+  // el celular con el HTML cacheado) pisaba la Sheet compartida y borraba los
+  // sueldos y gastos cargados desde el PC.
+  if (!window._syncInicialListo) return;
+  // Red de seguridad: un mes totalmente en blanco nunca es un estado legítimo
+  // (aun recién avanzado el mes, "casa" se hereda completa), así que si llega
+  // uno así es un error y no debe sobrescribir lo que hay en la nube.
+  if (!ingData.sf && !ingData.sfr &&
+      !(ingData.felipe||[]).length && !(ingData.fran||[]).length &&
+      !(ingData.casa||[]).length) return;
   clearTimeout(_pushMesTimer);
   _pushMesTimer = setTimeout(() => {
     fetch(script_url, {
@@ -2260,8 +2295,14 @@ async function syncMesFromSheet() {
     const data = await res.json();
     const meses = data.meses || {};
     const mesActual = ING.mes;
-    const mesKeyMatch = Object.keys(meses).find(k => k.toLowerCase() === (mesActual||'').toLowerCase());
-    const remoto = mesKeyMatch ? meses[mesKeyMatch] : null;
+    // La Sheet puede tener el mismo mes duplicado con distinta capitalización
+    // ("Julio 2026" y "julio 2026"). Quedarse con la entrada más completa, no
+    // con la primera, para que todos los dispositivos carguen los mismos datos.
+    const candidatos = Object.keys(meses)
+      .filter(k => k.toLowerCase() === (mesActual||'').toLowerCase())
+      .map(k => meses[k]);
+    const peso = m => (m.felipe||[]).length + (m.fran||[]).length + (m.casa||[]).length;
+    const remoto = candidatos.sort((a,b) => peso(b) - peso(a))[0] || null;
     if (remoto) {
       ING.sf = remoto.sueldo_felipe || ING.sf;
       ING.sfr = remoto.sueldo_fran || ING.sfr;
@@ -2282,6 +2323,19 @@ function claveGasto_(item) {
   return [item.fecha, item.desc, item.monto, item.tarjeta].join('|');
 }
 
+// ¿Este gasto ya está en la lista destino?
+// El registro de "ya importados" (sheet_loaded_keys) vive en el localStorage de
+// CADA navegador, así que un dispositivo nuevo lo tenía vacío y volvía a importar
+// gastos que ya venían dentro de los datos del mes → aparecían duplicados (había
+// items repetidos 2, 3 y hasta 4 veces). Comparar contra la lista real evita eso.
+function yaEnLista_(lista, it) {
+  return (lista || []).some(x =>
+    x.desc === it.desc &&
+    Number(x.monto) === Number(it.monto) &&
+    (!x.fecha || !it.fecha || x.fecha === it.fecha)
+  );
+}
+
 function mergeTarjetasDesdeSheet(items) {
   const yaVistos = new Set(lsGet('sheet_loaded_keys', []));
   let nuevos = 0;
@@ -2295,16 +2349,19 @@ function mergeTarjetasDesdeSheet(items) {
     // aunque se haya pagado con una tarjeta — va a su sección propia.
     if (item.persona === 'Felipe') {
       ING.felipe = ING.felipe || [];
+      if (yaEnLista_(ING.felipe, nuevoItem)) return;
       ING.felipe.push(nuevoItem);
       huboPersonal = true;
     } else if (item.persona === 'Fran') {
       ING.fran = ING.fran || [];
+      if (yaEnLista_(ING.fran, nuevoItem)) return;
       ING.fran.push(nuevoItem);
       huboPersonal = true;
     } else {
       const tar = item.tarjeta;
       if (!tar) return;
       if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
+      if (yaEnLista_(ING.tarjetas[tar], nuevoItem)) return;
       ING.tarjetas[tar].push(nuevoItem);
     }
     nuevos++;
@@ -2332,21 +2389,8 @@ function mergeTarjetasDesdeSheet(items) {
 // ═══════════════════════════════════════════════════
 applyHistOverrides();
 buildPicker();
-// Limpiar localStorage de Abril si quedó guardado
-const savedIng = lsGet('ing_current', null);
-if (savedIng && savedIng.mes && savedIng.mes !== ABR26.mes) {
-  // Hay datos de otro mes en localStorage — preguntar
-  const useFile = confirm(
-    'Tu navegador tiene guardado "' + savedIng.mes + '" pero este archivo es de "' + ABR26.mes + '".\n\n' +
-    '¿Cargar ' + ABR26.mes + ' (datos del archivo)?\nCancela para cargar ' + savedIng.mes + ' (lo que tenías guardado).'
-  );
-  if (useFile) {
-    try { localStorage.removeItem('gf_ing_current'); } catch(e) {}
-    ING = JSON.parse(JSON.stringify(ABR26));
-  }
-}
-
 // Si localStorage tiene un mes distinto al del archivo, ofrecer elegir
+// (una sola pregunta — antes se preguntaba dos veces lo mismo)
 const saved = lsGet('ing_current', null);
 if (saved && saved.mes && ABR26.mes && saved.mes !== ABR26.mes) {
   // Hay conflicto — preguntar
@@ -2362,13 +2406,17 @@ if (saved && saved.mes && ABR26.mes && saved.mes !== ABR26.mes) {
   }
 }
 
+// Hasta que no terminemos de LEER la Sheet, esta pestaña no puede ESCRIBIR en
+// ella (ver el candado en pushMesToSheet). Evita que un dispositivo recién
+// abierto pise los datos compartidos con su estado local vacío.
+window._syncInicialListo = false;
 window._cargandoDatos = true;
 buildIngreso();
 initModo();
-window._cargandoDatos = false;
 setTimeout(() => {
   syncMesFromSheet().finally(() => {
     window._cargandoDatos = false;
+    window._syncInicialListo = true;   // recién ahora se permite escribir
     if (SHEETS_CFG.activo && SHEETS_CFG.script_url) {
       setTimeout(iniciarLive, 300);
     }
