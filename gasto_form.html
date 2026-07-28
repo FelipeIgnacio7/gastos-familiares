@@ -98,11 +98,12 @@ h1 em{color:var(--F);font-style:normal}
 <div class="section">
   <div class="cuotas-row">
     <div class="label" style="margin:0">Cuotas</div>
-    <div class="stepper">
+    <div class="stepper" id="stepper-cuotas">
       <button class="step-btn" id="cuotas-menos">−</button>
       <div class="step-val" id="cuotas-val">1</div>
       <button class="step-btn" id="cuotas-mas">+</button>
     </div>
+    <div class="chip" id="chip-mensual" style="flex:0 0 auto;min-width:0;padding:10px 16px">Mensual</div>
   </div>
 </div>
 
@@ -113,7 +114,7 @@ h1 em{color:var(--F);font-style:normal}
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwmvbI8DkfNzp_8Clb248cK51X-ib3-_EHvti3j_K1mtdfMYqYYDwMQHWyFtyQqCN-Z3A/exec';
 
-let tarjeta = null, persona = null, cuotas = 1;
+let tarjeta = null, persona = null, cuotas = 1, esMensual = false;
 
 document.querySelectorAll('#chips-tarjeta .chip').forEach(function(c){
   c.addEventListener('click', function(){
@@ -132,6 +133,8 @@ document.querySelectorAll('#chips-persona .chip').forEach(function(c){
 });
 
 var cuotasVal = document.getElementById('cuotas-val');
+var stepperCuotas = document.getElementById('stepper-cuotas');
+var chipMensual = document.getElementById('chip-mensual');
 document.getElementById('cuotas-mas').addEventListener('click', function(){
   cuotas = Math.min(cuotas+1, 48);
   cuotasVal.textContent = cuotas;
@@ -139,6 +142,14 @@ document.getElementById('cuotas-mas').addEventListener('click', function(){
 document.getElementById('cuotas-menos').addEventListener('click', function(){
   cuotas = Math.max(cuotas-1, 1);
   cuotasVal.textContent = cuotas;
+});
+chipMensual.addEventListener('click', function(){
+  esMensual = !esMensual;
+  chipMensual.classList.toggle('on', esMensual);
+  // Un gasto mensual (Netflix, Entel, seguros...) no tiene número de cuotas,
+  // se repite igual todos los meses — el stepper no aplica en ese caso.
+  stepperCuotas.style.opacity = esMensual ? '.35' : '1';
+  stepperCuotas.style.pointerEvents = esMensual ? 'none' : 'auto';
 });
 
 function showToast(msg, type){
@@ -152,8 +163,11 @@ function resetForm(){
   document.getElementById('monto').value = '';
   document.getElementById('tienda').value = '';
   document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('on'); });
-  tarjeta = null; persona = null; cuotas = 1;
+  tarjeta = null; persona = null; cuotas = 1; esMensual = false;
   cuotasVal.textContent = '1';
+  chipMensual.classList.remove('on');
+  stepperCuotas.style.opacity = '1';
+  stepperCuotas.style.pointerEvents = 'auto';
   document.getElementById('monto').focus();
 }
 
@@ -176,7 +190,7 @@ document.getElementById('submit').addEventListener('click', function(){
     tienda: tienda,
     tarjeta: tarjeta,
     persona: persona,
-    cuotas: '1/' + cuotas
+    cuotas: esMensual ? 'mensual' : ('1/' + cuotas)
   };
 
   fetch(SCRIPT_URL, {
