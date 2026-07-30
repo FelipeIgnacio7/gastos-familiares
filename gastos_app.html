@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -1323,38 +1323,16 @@ function cerrarMes(){
     return {...i, cuotas:`${n+1}/${t}`};
   }
 
-  // También avanzar cuotas de los gastos que vienen de Google Sheets
-  function avanzarCuotasSheets(items){
-    return (items||[]).map(i => avanzarCuota(i)).filter(Boolean);
-  }
-
-  // Tarjetas: heredar items con cuotas pendientes (excluir 1/1 y terminadas)
+  // Tarjetas: heredar items con cuotas pendientes (excluir 1/1 y terminadas).
+  // NOTA: antes había un segundo paso que volvía a recorrer `liveData` (el log
+  // crudo de la Sheet) y reinyectaba cuotas avanzadas en newTarjetas. Eso
+  // duplicaba cualquier cuota que ya hubiera sido avanzada arriba desde
+  // `current.tarjetas` (la vista en pantalla, ya deduplicada) — se quitó.
   const newTarjetas={};
   Object.keys(current.tarjetas).forEach(name=>{
     newTarjetas[name]=(current.tarjetas[name]||[])
       .map(avanzarCuota).filter(Boolean);
   });
-
-  // También heredar cuotas pendientes que vienen de Google Sheets (liveData)
-  if(typeof liveData !== 'undefined' && liveData.length){
-    liveData.forEach(item=>{
-      const c=(item.cuotas||'').trim();
-      if(!c || c==='1/1' || c.toLowerCase()==='mensual') return;
-      const m=c.match(/^(\d+)\/(\d+)$/);
-      if(!m) return;
-      const n=parseInt(m[1]), t=parseInt(m[2]);
-      if(n>=t) return;
-      const avanzado={...item, cuotas:`${n+1}/${t}`};
-      // Agregar a la sección correcta según persona
-      if(item.persona==='Felipe') ING.felipe.push(avanzado);
-      else if(item.persona==='Fran') ING.fran.push(avanzado);
-      else if(item.persona==='Casa') ING.casa.push(avanzado);
-      else {
-        const tar=item.tarjeta;
-        if(newTarjetas[tar]) newTarjetas[tar].push(avanzado);
-      }
-    });
-  }
 
   ING={
     mes:newMes, sf:0, sfr:0,
