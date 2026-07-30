@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -665,6 +665,7 @@ function applyHistOverrides() {
 
 function buildPicker(){
   const el=document.getElementById('mprow'); let yr=null;
+  el.innerHTML=''; // se puede llamar más de una vez (p.ej. tras traer meses nuevos de la Sheet)
   HIST.forEach(d=>{
     if(d.año!==yr){yr=d.año;const l=document.createElement('span');l.className='yrlbl';l.textContent=yr;el.appendChild(l);}
     const b=document.createElement('button');b.className='mpick';b.textContent=d.mes;
@@ -672,6 +673,86 @@ function buildPicker(){
   });
   const last=HIST[HIST.length-1];
   selMth(last.id,el.querySelector(`[data-id="${last.id}"]`));
+}
+
+// Construye/actualiza entradas de HIST a partir de los meses reales que existen
+// en la Sheet (data.meses + data.values), en vez de depender solo de la lista
+// HIST fija escrita a mano en el código, que queda desactualizada cada vez que
+// se cierra un mes nuevo. Así "Julio 2026", "Agosto 2026", etc. aparecen en el
+// Historial en cualquier dispositivo, sin depender de localStorage por navegador.
+function syncHistFromSheet(data) {
+  const MESES_ABR = {Enero:'Ene',Febrero:'Feb',Marzo:'Mar',Abril:'Abr',Mayo:'May',
+    Junio:'Jun',Julio:'Jul',Agosto:'Ago',Septiembre:'Sep',Octubre:'Oct',Noviembre:'Nov',Diciembre:'Dic'};
+  const MESES_NUM = {Enero:1,Febrero:2,Marzo:3,Abril:4,Mayo:5,Junio:6,Julio:7,Agosto:8,Septiembre:9,Octubre:10,Noviembre:11,Diciembre:12};
+  const meses = data.meses || {};
+
+  // Agrupar el log crudo de tarjetas por mes ("2026-07"), excluyendo persona
+  // Felipe/Fran (esas ya están en meses.felipe/fran, incluirlas duplicaría).
+  const tarjetasPorMes = {};
+  if (data.values && data.values.length > 1) {
+    const h = data.values[0].map(x => (x||'').toLowerCase().trim());
+    const i_fecha=h.indexOf('fecha'), i_desc=h.indexOf('descripcion'), i_monto=h.indexOf('monto'),
+          i_tarjeta=h.indexOf('tarjeta'), i_persona=h.indexOf('persona'), i_cuotas=h.indexOf('cuotas');
+    data.values.slice(1).forEach(row => {
+      if (!row[i_tarjeta] || !row[i_fecha]) return;
+      const persona = i_persona>=0 ? (row[i_persona]||'') : '';
+      if (persona==='Felipe' || persona==='Fran') return;
+      const mesKey = row[i_fecha].slice(0,7);
+      if (!tarjetasPorMes[mesKey]) tarjetasPorMes[mesKey] = {};
+      const tar = row[i_tarjeta];
+      if (!tarjetasPorMes[mesKey][tar]) tarjetasPorMes[mesKey][tar] = [];
+      tarjetasPorMes[mesKey][tar].push({
+        fecha: row[i_fecha]||'', desc: row[i_desc]||'',
+        monto: parseFloat(row[i_monto])||0, cuotas: row[i_cuotas]||'1/1'
+      });
+    });
+  }
+
+  // La Sheet puede tener el mismo mes con distinta capitalización
+  // ("Julio 2026" / "julio 2026") — quedarse con la entrada más completa.
+  const porNombre = {};
+  Object.keys(meses).forEach(k => {
+    const key = k.toLowerCase();
+    const peso = m => (m.felipe||[]).length + (m.fran||[]).length + (m.casa||[]).length;
+    if (!porNombre[key] || peso(meses[k]) > peso(porNombre[key].datos)) {
+      porNombre[key] = {nombre: k, datos: meses[k]};
+    }
+  });
+
+  let huboCambios = false;
+  Object.values(porNombre).forEach(({nombre, datos: remoto}) => {
+    const partes = nombre.trim().split(' ');
+    const nombreMes = partes[0].charAt(0).toUpperCase() + partes[0].slice(1).toLowerCase();
+    const año = parseInt(partes[1]) || new Date().getFullYear();
+    const mesNum = MESES_NUM[nombreMes];
+    if (!mesNum) return; // nombre de mes no reconocible (ej: fila de prueba) — ignorar
+    const periodo = nombreMes + ' ' + año;
+    const id = año + '-' + String(mesNum).padStart(2,'0');
+
+    const tarjetas = tarjetasPorMes[id] || {};
+    const sf = remoto.sueldo_felipe || 0, sfr = remoto.sueldo_fran || 0;
+    const tf = (remoto.felipe||[]).reduce((s,i)=>s+(i.monto||0),0);
+    const tfr = (remoto.fran||[]).reduce((s,i)=>s+(i.monto||0),0);
+    const th = (remoto.casa||[]).reduce((s,i)=>s+(i.monto||0),0);
+    const tt = Object.values(tarjetas).flat().reduce((s,i)=>s+(i.monto||0),0);
+    const tot = tf+tfr+th+tt;
+
+    const entry = {
+      año, mes_num: mesNum, mes: MESES_ABR[nombreMes] || nombreMes.slice(0,3),
+      periodo, id,
+      sueldo_felipe: sf, sueldo_fran: sfr, ingreso_total: sf+sfr,
+      total_felipe: tf, total_fran: tfr, total_casa: th, total_tarjetas: tt,
+      total_gastos: tot, disponible: (sf+sfr)-tot,
+      felipe: remoto.felipe||[], fran: remoto.fran||[], casa: remoto.casa||[],
+      tarjetas, usd: remoto.usd||[],
+    };
+
+    const idx = HIST.findIndex(d => d.id===id || d.periodo===periodo);
+    if (idx >= 0) HIST[idx] = {...HIST[idx], ...entry};
+    else { HIST.push(entry); huboCambios = true; }
+  });
+
+  if (huboCambios) HIST.sort((a,b)=> (a.año-b.año) || (a.mes_num-b.mes_num));
 }
 
 function selMth(id,btn){
@@ -2330,6 +2411,11 @@ async function syncMesFromSheet() {
       buildIngreso();
       toast('✓ Datos cargados desde Google Sheets', 'ok');
     }
+
+    // Actualizar Historial con todos los meses reales que existen en la Sheet
+    // (no solo el mes actual), y refrescar el selector de meses en la barra lateral.
+    syncHistFromSheet(data);
+    buildPicker();
   } catch(e) { console.error('syncMesFromSheet error:', e); }
 }
 
@@ -2416,22 +2502,12 @@ function mergeTarjetasDesdeSheet(items) {
 // ═══════════════════════════════════════════════════
 applyHistOverrides();
 buildPicker();
-// Si localStorage tiene un mes distinto al del archivo, ofrecer elegir
-// (una sola pregunta — antes se preguntaba dos veces lo mismo)
-const saved = lsGet('ing_current', null);
-if (saved && saved.mes && ABR26.mes && saved.mes !== ABR26.mes) {
-  // Hay conflicto — preguntar
-  const useSaved = confirm(
-    `Este archivo contiene datos de "${ABR26.mes}"\n` +
-    `pero tu navegador tiene guardado "${saved.mes}".\n\n` +
-    `¿Quieres cargar "${saved.mes}" (lo que editaste antes)?\n` +
-    `Cancela para cargar "${ABR26.mes}" (los datos del archivo).`
-  );
-  if (!useSaved) {
-    try { localStorage.removeItem('gf_ing_current'); } catch(e) {}
-    ING = JSON.parse(JSON.stringify(ABR26));
-  }
-}
+// ABR26 es solo el snapshot de respaldo embebido en el archivo (se usa si
+// localStorage está vacío, o al exportar "Guardar HTML"). Ya no se compara
+// contra localStorage para preguntar cuál usar: la Sheet de Google es la
+// fuente de verdad y syncMesFromSheet() más abajo se encarga de traer los
+// datos reales del mes en curso. Preguntar aquí solo generaba un diálogo
+// confuso con datos de ABR26 que quedan desactualizados con el tiempo.
 
 // Hasta que no terminemos de LEER la Sheet, esta pestaña no puede ESCRIBIR en
 // ella (ver el candado en pushMesToSheet). Evita que un dispositivo recién
