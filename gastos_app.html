@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 4;
+const APP_VERSION = 5;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2294,15 +2294,23 @@ async function syncMesFromSheet() {
     if (!res.ok) return;
     const data = await res.json();
     const meses = data.meses || {};
-    const mesActual = ING.mes;
-    // La Sheet puede tener el mismo mes duplicado con distinta capitalización
-    // ("Julio 2026" y "julio 2026"). Quedarse con la entrada más completa, no
-    // con la primera, para que todos los dispositivos carguen los mismos datos.
-    const candidatos = Object.keys(meses)
-      .filter(k => k.toLowerCase() === (mesActual||'').toLowerCase())
-      .map(k => meses[k]);
-    const peso = m => (m.felipe||[]).length + (m.fran||[]).length + (m.casa||[]).length;
-    const remoto = candidatos.sort((a,b) => peso(b) - peso(a))[0] || null;
+    let mesActual = ING.mes || 'Julio 2026';
+
+    // Si no está el mes exacto, intentar con distinta capitalización
+    let remoto = meses[mesActual];
+    if (!remoto) {
+      const candidatos = Object.keys(meses)
+        .filter(k => k.toLowerCase() === (mesActual||'').toLowerCase())
+        .map(k => meses[k]);
+      const peso = m => (m.felipe||[]).length + (m.fran||[]).length + (m.casa||[]).length;
+      remoto = candidatos.sort((a,b) => peso(b) - peso(a))[0] || null;
+    }
+
+    // Si aún no hay datos, intentar con "Julio 2026" como fallback
+    if (!remoto && mesActual !== 'Julio 2026') {
+      remoto = meses['Julio 2026'];
+    }
+
     if (remoto) {
       ING.sf = remoto.sueldo_felipe || ING.sf;
       ING.sfr = remoto.sueldo_fran || ING.sfr;
@@ -2310,12 +2318,14 @@ async function syncMesFromSheet() {
       if (remoto.fran && remoto.fran.length) ING.fran = remoto.fran;
       if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
       if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
+      // Cargar también tarjetas
+      if (remoto.tarjetas) ING.tarjetas = remoto.tarjetas;
       window._cargandoDatos = true;
       lsSave('ing_current', ING);
       buildIngreso();
-      toast('✓ Datos cargados desde Google Sheets (compartidos)', 'ok');
+      toast('✓ Datos cargados desde Google Sheets', 'ok');
     }
-  } catch(e) { /* silencioso */ }
+  } catch(e) { console.error('syncMesFromSheet error:', e); }
 }
 
 // Fusiona gastos de tarjeta nuevos desde la Sheet, evitando duplicados
