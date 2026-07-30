@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 6;
+const APP_VERSION = 7;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2319,18 +2319,23 @@ async function syncMesFromSheet() {
       if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
       if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
 
-      // Procesar tarjetas desde data.values (el log crudo de la Sheet)
+      // Procesar tarjetas desde data.values (el log crudo de la Sheet).
+      // OJO: excluir persona Felipe/Fran — esas filas ya viven en meses.felipe/fran
+      // (gasto personal pagado con tarjeta). Incluirlas aquí también las duplica.
       if (data.values && data.values.length > 1) {
         const h = data.values[0].map(x => (x||'').toLowerCase().trim());
         const i_fecha = h.indexOf('fecha');
         const i_desc = h.indexOf('descripcion');
         const i_monto = h.indexOf('monto');
         const i_tarjeta = h.indexOf('tarjeta');
+        const i_persona = h.indexOf('persona');
         const i_cuotas = h.indexOf('cuotas');
 
         ING.tarjetas = {};
         data.values.slice(1).forEach(row => {
           if (!row[i_tarjeta]) return;
+          const persona = i_persona >= 0 ? (row[i_persona] || '') : '';
+          if (persona === 'Felipe' || persona === 'Fran') return; // ya está en meses.felipe/fran
           const tar = row[i_tarjeta];
           if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
           ING.tarjetas[tar].push({
