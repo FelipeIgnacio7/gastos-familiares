@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -428,7 +428,8 @@ input,select,button{font-family:var(--sans)}
     <span class="mes-arrow">→</span>
     <input id="mes-input" style="background:none;border:1px solid var(--bdr);border-radius:7px;
       color:var(--text);font-family:var(--sans);font-size:12px;padding:5px 10px;outline:none;width:140px" 
-      value="Julio 2026" oninput="document.getElementById('mes-badge').textContent=this.value">
+      value="Julio 2026" oninput="document.getElementById('mes-badge').textContent=this.value"
+      onchange="cambiarMesEditando(this.value)">
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
       <button class="btn btn-g" onclick="resetMes()" style="color:var(--F);border-color:rgba(245,166,35,.3);font-size:11px" title="Vuelve a cargar los datos originales de este archivo">↺ Recargar datos</button>
       <button class="btn btn-g" onclick="cerrarMes()">📌 Cerrar mes y abrir siguiente</button>
@@ -1368,6 +1369,24 @@ function collectING(){
       [...document.querySelectorAll(`.tar-rows[data-tr="${name}"] .erow`)].map(r=>{const i=r.querySelectorAll('input');return{desc:i[0].value,monto:parseFloat(i[1].value)||0,cuotas:i[2]?.value||'1/1'};})])),
     usd:[...document.querySelectorAll('#rows-u .erow')].map(r=>{const desc=r.querySelector('input[type=text]');const usd=r.querySelector('.usd-inp');return{desc:desc?.value||'',usd:parseFloat(usd?.value)||0};}),
   };
+}
+
+// Antes, escribir un mes distinto en este campo solo cambiaba la ETIQUETA
+// (mes-badge) sin cargar los datos de ese mes — seguías viendo/editando los
+// gastos del mes anterior, pero con el nombre del mes nuevo. Al autoguardar,
+// eso sobrescribía el mes equivocado en la Sheet (así se perdió Julio varias
+// veces). Ahora, al cambiar el campo, se carga de verdad ese mes desde la Sheet.
+function cambiarMesEditando(nuevoMes) {
+  nuevoMes = (nuevoMes||'').trim();
+  if (!nuevoMes || nuevoMes === ING.mes) return;
+  if (!confirm(`¿Cambiar a "${nuevoMes}"? Se cargarán los datos de ese mes desde Google Sheets, reemplazando lo que ves ahora.`)) {
+    document.getElementById('mes-input').value = ING.mes;
+    document.getElementById('mes-badge').textContent = ING.mes;
+    return;
+  }
+  ING.mes = nuevoMes;
+  lsSave('ing_current', ING);
+  syncMesFromSheet();
 }
 
 function resetMes() {
