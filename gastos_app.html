@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -686,8 +686,13 @@ function syncHistFromSheet(data) {
   const MESES_NUM = {Enero:1,Febrero:2,Marzo:3,Abril:4,Mayo:5,Junio:6,Julio:7,Agosto:8,Septiembre:9,Octubre:10,Noviembre:11,Diciembre:12};
   const meses = data.meses || {};
 
-  // Agrupar el log crudo de tarjetas por mes ("2026-07"), excluyendo persona
+  // Agrupar el log crudo de tarjetas por ciclo de facturación (~22 al ~21,
+  // ver mesAppParaFecha), no por mes calendario — excluyendo persona
   // Felipe/Fran (esas ya están en meses.felipe/fran, incluirlas duplicaría).
+  // OJO: esto muestra la cuota tal como quedó registrada en la Sheet al
+  // momento de la compra (ej "1/6"), no la avanzada por cerrarMes() en meses
+  // posteriores — es una vista de referencia para Historial, no la fuente
+  // editable del mes en curso (esa es ING.tarjetas, mantenida aparte).
   const tarjetasPorMes = {};
   if (data.values && data.values.length > 1) {
     const h = data.values[0].map(x => (x||'').toLowerCase().trim());
@@ -697,13 +702,16 @@ function syncHistFromSheet(data) {
       if (!row[i_tarjeta] || !row[i_fecha]) return;
       const persona = i_persona>=0 ? (row[i_persona]||'') : '';
       if (persona==='Felipe' || persona==='Fran') return;
-      const mesKey = row[i_fecha].slice(0,7);
+      const mesApp = mesAppParaFecha(row[i_fecha]);
+      if (!mesApp) return;
+      const [nombreApp, añoAppStr] = mesApp.split(' ');
+      const mesKey = añoAppStr + '-' + String(MESES_NUM[nombreApp]||0).padStart(2,'0');
       if (!tarjetasPorMes[mesKey]) tarjetasPorMes[mesKey] = {};
       const tar = row[i_tarjeta];
       if (!tarjetasPorMes[mesKey][tar]) tarjetasPorMes[mesKey][tar] = [];
       tarjetasPorMes[mesKey][tar].push({
         fecha: row[i_fecha]||'', desc: row[i_desc]||'',
-        monto: parseFloat(row[i_monto])||0, cuotas: row[i_cuotas]||'1/1'
+        monto: parseFloat(row[i_monto])||0, cuotas: normalizarCuotas(row[i_cuotas])||'1/1'
       });
     });
   }
@@ -2163,6 +2171,34 @@ function guardarCfgSheets() {
   toast('✓ Conectado — actualizando cada 30 seg.','ok');
 }
 
+// Google Sheets a veces sigue interpretando "1/3" como fecha (1 de marzo) pese
+// a que la columna está formateada como texto — pasa con filas nuevas que
+// exceden el rango que se alcanzó a formatear. En vez de depender de arreglar
+// la Sheet cada vez, la app detecta el patrón de fecha ISO y lo revierte a N/T.
+function normalizarCuotas(v) {
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (!m) return s;
+  const dia = parseInt(m[3], 10), mes = parseInt(m[2], 10);
+  return `${dia}/${mes}`;
+}
+
+// La tarjeta de crédito se factura ~el 22 de un mes al ~21 del siguiente, no por
+// mes calendario. Un gasto con fecha 25/07 ya pertenece al ciclo de "Agosto",
+// aunque el calendario todavía diga julio. Sin esto, un gasto agregado los
+// últimos días del mes calendario (justo cuando se suele cerrar el mes en la
+// app) no calzaba con el mes recién abierto y desaparecía del filtro, o al
+// revés, un gasto de fin de mes anterior seguía viéndose en el mes ya cerrado.
+const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio',
+  'Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function mesAppParaFecha(fechaStr) {
+  const m = String(fechaStr||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  let ano = parseInt(m[1],10), mesIdx = parseInt(m[2],10)-1, dia = parseInt(m[3],10);
+  if (dia >= 22) { mesIdx++; if (mesIdx > 11) { mesIdx = 0; ano++; } }
+  return MESES_NOMBRES[mesIdx] + ' ' + ano;
+}
+
 async function fetchSheets() {
   const {script_url} = SHEETS_CFG;
   if (!script_url) return null;
@@ -2188,7 +2224,7 @@ async function fetchSheets() {
         monto:      monto,
         tarjeta:    get('tarjeta'),
         persona:    get('persona') || 'Felipe',
-        cuotas:     get('cuotas') || '1/1',
+        cuotas:     normalizarCuotas(get('cuotas')) || '1/1',
         categoria:  get('categoria') || categorizarJS(get('descripcion')),
       });
     }
@@ -2232,15 +2268,10 @@ async function actualizarLive() {
   const items = await fetchSheets();
   if (!items) return;
 
-  // Filtrar por mes actual del formulario
+  // Filtrar por mes actual del formulario, usando el ciclo de facturación de
+  // la tarjeta (~22 al ~21), no el mes calendario — ver mesAppParaFecha().
   const mesActual = document.getElementById('mes-input')?.value || '';
-  const MESES = {Enero:'01',Febrero:'02',Marzo:'03',Abril:'04',Mayo:'05',
-                 Junio:'06',Julio:'07',Agosto:'08',Septiembre:'09',
-                 Octubre:'10',Noviembre:'11',Diciembre:'12'};
-  const p = mesActual.split(' ');
-  const mesKey = p[1] ? (p[1]+'-'+(MESES[p[0]]||'05')) : '';
-
-  liveData = mesKey ? items.filter(i => i.fecha.startsWith(mesKey)) : items;
+  liveData = mesActual ? items.filter(i => mesAppParaFecha(i.fecha) === mesActual) : items;
 
   // Fusionar automáticamente los gastos nuevos de tarjeta (sin duplicar)
   mergeTarjetasDesdeSheet(liveData);
@@ -2378,32 +2409,28 @@ async function syncMesFromSheet() {
       if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
       if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
 
-      // Procesar tarjetas desde data.values (el log crudo de la Sheet).
-      // OJO: excluir persona Felipe/Fran — esas filas ya viven en meses.felipe/fran
-      // (gasto personal pagado con tarjeta). Incluirlas aquí también las duplica.
+      // NOTA: las tarjetas NO se reconstruyen aquí desde data.values (el log
+      // crudo). Se intentó eso y rompe las compras en cuotas: cada fila del
+      // log guarda el valor de cuota de cuando se compró (ej "1/6"), no el
+      // avanzado por cerrarMes() meses después (ej "5/6") — el backend de la
+      // Sheet tampoco guarda tarjetas dentro de "meses" (se verificó: un
+      // save_mes con tarjetas lo descarta en silencio). Por eso ING.tarjetas
+      // se deja tal cual venía (de localStorage / del cierre de mes), y el
+      // bootstrapping de gastos de tarjeta nuevos se hace más abajo con
+      // mergeTarjetasDesdeSheet(), que sí es compatible con cuotas avanzadas
+      // porque solo AGREGA gastos nuevos sin tocar los que ya existen.
       if (data.values && data.values.length > 1) {
-        const h = data.values[0].map(x => (x||'').toLowerCase().trim());
-        const i_fecha = h.indexOf('fecha');
-        const i_desc = h.indexOf('descripcion');
-        const i_monto = h.indexOf('monto');
-        const i_tarjeta = h.indexOf('tarjeta');
-        const i_persona = h.indexOf('persona');
-        const i_cuotas = h.indexOf('cuotas');
-
-        ING.tarjetas = {};
-        data.values.slice(1).forEach(row => {
-          if (!row[i_tarjeta]) return;
-          const persona = i_persona >= 0 ? (row[i_persona] || '') : '';
-          if (persona === 'Felipe' || persona === 'Fran') return; // ya está en meses.felipe/fran
-          const tar = row[i_tarjeta];
-          if (!ING.tarjetas[tar]) ING.tarjetas[tar] = [];
-          ING.tarjetas[tar].push({
-            fecha: row[i_fecha] || '',
-            desc: row[i_desc] || '',
-            monto: parseFloat(row[i_monto]) || 0,
-            cuotas: row[i_cuotas] || '1/1'
-          });
-        });
+        const headers = data.values[0].map(x => (x||'').toLowerCase().trim());
+        const idx = (k) => headers.indexOf(k);
+        const itemsDelMes = data.values.slice(1).map(row => ({
+          fecha:   row[idx('fecha')] || '',
+          desc:    row[idx('descripcion')] || '',
+          monto:   parseFloat(String(row[idx('monto')]||'0').replace(/[^\d.-]/g,'')) || 0,
+          tarjeta: row[idx('tarjeta')] || '',
+          persona: row[idx('persona')] || 'Felipe',
+          cuotas:  normalizarCuotas(row[idx('cuotas')]) || '1/1',
+        })).filter(i => i.monto && mesAppParaFecha(i.fecha) === mesActual);
+        mergeTarjetasDesdeSheet(itemsDelMes);
       }
 
       window._cargandoDatos = true;
