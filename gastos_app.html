@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2375,6 +2375,7 @@ function pushMesToSheet(ingData) {
         fran: ingData.fran,
         casa: ingData.casa,
         usd: ingData.usd,
+        tarjetas: ingData.tarjetas,
       })
     }).catch(()=>{});
   }, 600);
@@ -2414,17 +2415,13 @@ async function syncMesFromSheet() {
       if (remoto.fran && remoto.fran.length) ING.fran = remoto.fran;
       if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
       if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
-
-      // NOTA: las tarjetas NO se reconstruyen aquí desde data.values (el log
-      // crudo). Se intentó eso y rompe las compras en cuotas: cada fila del
-      // log guarda el valor de cuota de cuando se compró (ej "1/6"), no el
-      // avanzado por cerrarMes() meses después (ej "5/6") — el backend de la
-      // Sheet tampoco guarda tarjetas dentro de "meses" (se verificó: un
-      // save_mes con tarjetas lo descarta en silencio). Por eso ING.tarjetas
-      // se deja tal cual venía (de localStorage / del cierre de mes), y el
-      // bootstrapping de gastos de tarjeta nuevos se hace más abajo con
-      // mergeTarjetasDesdeSheet(), que sí es compatible con cuotas avanzadas
-      // porque solo AGREGA gastos nuevos sin tocar los que ya existen.
+      // Tarjetas ahora sí se guardan en la Sheet (columna tarjetas_json de
+      // "MesActual", agregada al Apps Script) — es la fuente compartida entre
+      // dispositivos, con las cuotas ya avanzadas por cerrarMes(). Se carga
+      // aquí igual que felipe/fran/casa, y luego mergeTarjetasDesdeSheet()
+      // (más abajo) agrega encima cualquier gasto de tarjeta nuevo que aún no
+      // esté reflejado (p.ej. una compra hecha hoy, recién llegada al log).
+      if (remoto.tarjetas && Object.keys(remoto.tarjetas).length) ING.tarjetas = remoto.tarjetas;
       if (data.values && data.values.length > 1) {
         const MESES_M = {Enero:'01',Febrero:'02',Marzo:'03',Abril:'04',Mayo:'05',
           Junio:'06',Julio:'07',Agosto:'08',Septiembre:'09',Octubre:'10',Noviembre:'11',Diciembre:'12'};
