@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -420,6 +420,15 @@ input,select,button{font-family:var(--sans)}
 
 <!-- ══════════ INGRESO ══════════ -->
 <div class="view" id="view-ingreso">
+
+  <!-- Aviso: hay un mes nuevo disponible en otro dispositivo -->
+  <div id="mes-nuevo-banner" style="display:none;align-items:center;gap:12px;
+    background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.4);
+    border-radius:10px;padding:10px 16px;margin-bottom:12px">
+    <span id="mes-nuevo-texto" style="font-size:13px;font-weight:600;color:var(--F)"></span>
+    <button class="btn btn-p" style="margin-left:auto;padding:6px 14px;font-size:12px" onclick="cambiarAMesNuevo()">Cambiar</button>
+    <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1" onclick="descartarAvisoMesNuevo()">×</button>
+  </div>
 
   <!-- Mes actual -->
   <div class="mes-mgmt">
@@ -1494,8 +1503,61 @@ function cerrarMes(){
   // Descargar nuevo HTML con ING incrustado como ABR26
   generarArchivoMes(ING, newMes);
 
+  // Avisar al resto de dispositivos que hay un mes nuevo (ver checkMesActivo()).
+  avisarMesActivo(newMes);
+
   buildIngreso();
   toast(`✓ ${current.mes} cerrado → generando ${newMes}...`,'ok');
+}
+
+// Notifica a la Sheet cuál es "el mes activo" globalmente. Otros dispositivos
+// lo detectan en su próxima sincronización y muestran un aviso para cambiarse
+// (ver checkMesActivo / banner #mes-nuevo-banner), sin saltar de mes solos.
+function avisarMesActivo(mes) {
+  const {script_url} = SHEETS_CFG;
+  if (!script_url) return;
+  fetch(script_url, {
+    method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({action: 'set_mes_activo', mes})
+  }).catch(()=>{});
+}
+
+// ¿La Sheet dice que hay un mes activo distinto al que estoy viendo? Si el
+// usuario ya descartó el aviso para ESE mes específico, no insistir de nuevo.
+function checkMesActivo(mesActivoRemoto) {
+  if (!mesActivoRemoto || mesActivoRemoto === ING.mes) { ocultarAvisoMesNuevo(); return; }
+  if (lsGet('mes_activo_descartado', '') === mesActivoRemoto) return;
+  mostrarAvisoMesNuevo(mesActivoRemoto);
+}
+
+function mostrarAvisoMesNuevo(mes) {
+  const b = document.getElementById('mes-nuevo-banner');
+  if (!b) return;
+  document.getElementById('mes-nuevo-texto').textContent = `Hay un mes nuevo disponible: ${mes}`;
+  b.dataset.mes = mes;
+  b.style.display = 'flex';
+}
+
+function ocultarAvisoMesNuevo() {
+  const b = document.getElementById('mes-nuevo-banner');
+  if (b) b.style.display = 'none';
+}
+
+function cambiarAMesNuevo() {
+  const b = document.getElementById('mes-nuevo-banner');
+  const mes = b?.dataset.mes;
+  if (!mes) return;
+  document.getElementById('mes-input').value = mes;
+  cambiarMesEditando(mes);
+  ocultarAvisoMesNuevo();
+}
+
+function descartarAvisoMesNuevo() {
+  const b = document.getElementById('mes-nuevo-banner');
+  const mes = b?.dataset.mes;
+  if (mes) lsSave('mes_activo_descartado', mes);
+  ocultarAvisoMesNuevo();
 }
 
 function _generarHTML(ingData, modoVista) {
@@ -2208,6 +2270,10 @@ async function fetchSheets() {
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
+    // Efecto lateral: guardar el "mes activo" global para que quien llame
+    // (actualizarLive) pueda avisar si hay un mes nuevo en otro dispositivo,
+    // sin cambiar la forma en que fetchSheets() devuelve sus datos.
+    window._mesActivoRemoto = data.mes_activo || null;
     const rows = data.values || [];
     if (rows.length < 2) return [];
 
@@ -2267,6 +2333,7 @@ function categorizarJS(desc) {
 async function actualizarLive() {
   const items = await fetchSheets();
   if (!items) return;
+  checkMesActivo(window._mesActivoRemoto);
 
   // Filtrar por mes actual del formulario (mes calendario simple: el gasto
   // cuenta para el mes cuya fecha tiene). El usuario decide en qué mes cae
@@ -2390,6 +2457,7 @@ async function syncMesFromSheet() {
     const res = await fetch(script_url);
     if (!res.ok) return;
     const data = await res.json();
+    checkMesActivo(data.mes_activo);
     const meses = data.meses || {};
     let mesActual = ING.mes || 'Julio 2026';
 
