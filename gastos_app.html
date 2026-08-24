@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2265,17 +2265,18 @@ function normalizarCuotas(v) {
   return `${dia}/${mes}`;
 }
 
-// La tarjeta se factura el 23 de cada mes: un gasto con fecha 23 en adelante
-// ya pertenece al ciclo/mes siguiente para efectos del presupuesto, aunque la
-// fecha real (la que se guarda, la que sirve para cruzar contra la cartola
-// bancaria) nunca se toca — solo cambia a qué mes de la app se clasifica.
+// La tarjeta se factura el 23 de cada mes: el día 23 todavía cuenta para el
+// mes en curso (es el corte de cierre), y recién desde el 24 en adelante un
+// gasto pertenece al ciclo/mes siguiente. La fecha real (la que se guarda, la
+// que sirve para cruzar contra la cartola bancaria) nunca se toca — solo
+// cambia a qué mes de la app se clasifica.
 const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio',
   'Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 function mesAppParaFecha(fechaStr) {
   const m = String(fechaStr||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return null;
   let ano = parseInt(m[1],10), mesIdx = parseInt(m[2],10)-1, dia = parseInt(m[3],10);
-  if (dia >= 23) { mesIdx++; if (mesIdx > 11) { mesIdx = 0; ano++; } }
+  if (dia >= 24) { mesIdx++; if (mesIdx > 11) { mesIdx = 0; ano++; } }
   return MESES_NOMBRES[mesIdx] + ' ' + ano;
 }
 
