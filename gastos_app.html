@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2490,19 +2490,27 @@ async function syncMesFromSheet() {
     }
 
     if (remoto) {
-      ING.sf = remoto.sueldo_felipe || ING.sf;
-      ING.sfr = remoto.sueldo_fran || ING.sfr;
-      if (remoto.felipe && remoto.felipe.length) ING.felipe = remoto.felipe;
-      if (remoto.fran && remoto.fran.length) ING.fran = remoto.fran;
-      if (remoto.casa && remoto.casa.length) ING.casa = remoto.casa;
-      if (remoto.usd && remoto.usd.length) ING.usd = remoto.usd;
+      // OJO: antes esto solo pisaba el valor local si el de la Sheet no estaba
+      // vacío (array/objeto con .length, o sueldo != 0). La intención era no
+      // perder datos con una lectura incompleta — pero como ya estamos DENTRO
+      // de `if (remoto)` (la Sheet sí devolvió datos válidos para este mes),
+      // un array vacío o un sueldo en 0 es una respuesta legítima, no una
+      // lectura fallida. Con la protección vieja, vaciar una sección a
+      // propósito (ej. mover todo Casa a Felipe/Fran) nunca se reflejaba si
+      // el navegador tenía algo guardado localmente — la Sheet manda, siempre.
+      ING.sf = remoto.sueldo_felipe ?? ING.sf;
+      ING.sfr = remoto.sueldo_fran ?? ING.sfr;
+      if (remoto.felipe) ING.felipe = remoto.felipe;
+      if (remoto.fran) ING.fran = remoto.fran;
+      if (remoto.casa) ING.casa = remoto.casa;
+      if (remoto.usd) ING.usd = remoto.usd;
       // Tarjetas ahora sí se guardan en la Sheet (columna tarjetas_json de
       // "MesActual", agregada al Apps Script) — es la fuente compartida entre
       // dispositivos, con las cuotas ya avanzadas por cerrarMes(). Se carga
       // aquí igual que felipe/fran/casa, y luego mergeTarjetasDesdeSheet()
       // (más abajo) agrega encima cualquier gasto de tarjeta nuevo que aún no
       // esté reflejado (p.ej. una compra hecha hoy, recién llegada al log).
-      if (remoto.tarjetas && Object.keys(remoto.tarjetas).length) ING.tarjetas = remoto.tarjetas;
+      if (remoto.tarjetas) ING.tarjetas = remoto.tarjetas;
       if (data.values && data.values.length > 1) {
         const headers = data.values[0].map(x => (x||'').toLowerCase().trim());
         const idx = (k) => headers.indexOf(k);
