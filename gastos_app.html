@@ -175,6 +175,8 @@ input,select,button{font-family:var(--sans)}
   font-family:var(--sans);font-size:12px;width:100%;padding:7px 3px;outline:none}
 .erow input::placeholder{color:var(--bdr2)}
 .erow input:focus{background:rgba(255,255,255,.025);border-radius:4px}
+.pr-inp{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;outline:none;min-width:0}
+.pr-inp:focus{border-color:var(--bdr2)}
 .mono-inp{font-family:var(--mono)!important;text-align:right!important;font-size:12px!important}
 .cuota-inp{font-family:var(--mono)!important;text-align:center!important;font-size:10px!important;color:var(--muted)!important}
 .del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;
@@ -247,6 +249,7 @@ input,select,button{font-family:var(--sans)}
     <button class="tab on" onclick="switchView('historial',this)">📋 Historial</button>
     <button class="tab" onclick="switchView('graficos',this)">📊 Gráficos</button>
     <button class="tab" onclick="switchView('ingreso',this)">✏️ Ingresar</button>
+    <button class="tab" onclick="switchView('prestamos',this)">🤝 Préstamos</button>
   </div>
   <div class="hdr-actions" style="display:flex;align-items:center;gap:6px">
     <span id="save-ind" style="font-size:10px;color:var(--muted);font-family:var(--mono);white-space:nowrap">● Auto-guardado activo</span>
@@ -416,6 +419,36 @@ input,select,button{font-family:var(--sans)}
       </div>
     </div>
   </div>
+</div>
+
+<!-- ══════════ PRÉSTAMOS ══════════ -->
+<div class="view" id="view-prestamos">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:16px;font-weight:800">🤝 Préstamos de tarjeta</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Compras que hizo otra persona con tu tarjeta. No cuentan como gasto de la familia: solo llevas el saldo de lo que te deben.</div>
+    </div>
+    <button class="btn btn-g" onclick="cargarPrestamos(true)">↻ Actualizar</button>
+  </div>
+
+  <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px">
+    <div class="kpi" style="--kc:var(--R)"><div class="kpi-lbl">Te deben</div><div class="kpi-val" id="pr-pend">–</div></div>
+    <div class="kpi" style="--kc:var(--T)"><div class="kpi-lbl">Prestado en total</div><div class="kpi-val" id="pr-tot">–</div></div>
+    <div class="kpi" style="--kc:var(--G)"><div class="kpi-lbl">Ya devuelto</div><div class="kpi-val" id="pr-pag">–</div></div>
+  </div>
+
+  <div id="pr-form" style="background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:14px;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Nuevo préstamo</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="pr-nombre" class="pr-inp" placeholder="¿A quién? (ej: Mamá)" style="flex:1 1 140px">
+      <input id="pr-detalle" class="pr-inp" placeholder="¿Qué compró? (ej: Sodimac)" style="flex:2 1 180px">
+      <input id="pr-monto" class="pr-inp" type="number" inputmode="numeric" placeholder="Monto" style="flex:1 1 100px">
+      <select id="pr-tarjeta" class="pr-inp" style="flex:1 1 140px"></select>
+      <button class="btn btn-p" onclick="agregarPrestamo()">Agregar</button>
+    </div>
+  </div>
+
+  <div id="pr-lista"><div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">Cargando…</div></div>
 </div>
 
 <!-- ══════════ INGRESO ══════════ -->
@@ -618,6 +651,7 @@ function switchView(v,btn){
   document.getElementById('view-'+v).classList.add('on');
   if(v==='graficos') buildCharts();
   if(v==='ingreso') recalc();
+  if(v==='prestamos') cargarPrestamos();
   if(v==='historial' && curMth) updateHSidebar();
 }
 
@@ -712,7 +746,7 @@ function syncHistFromSheet(data) {
     data.values.slice(1).forEach(row => {
       if (!row[i_tarjeta] || !row[i_fecha]) return;
       const persona = i_persona>=0 ? (row[i_persona]||'') : '';
-      if (persona==='Felipe' || persona==='Fran') return;
+      if (persona==='Felipe' || persona==='Fran' || esPersonaPrestamo(persona)) return;
       const mesApp = mesAppParaFecha(row[i_fecha]);
       if (!mesApp) return;
       const [nombreApp, añoAppStr] = mesApp.split(' ');
@@ -1907,7 +1941,7 @@ function initModo() {
   if (isVista) {
     // Ocultar tab de ingreso y botones de edición
     document.querySelectorAll('.tab').forEach(b => {
-      if (b.textContent.includes('Ingresar')) b.style.display = 'none';
+      if (b.textContent.includes('Ingresar') || b.textContent.includes('Préstamos')) b.style.display = 'none';
     });
     // Ocultar botones de guardar/exportar
     document.querySelectorAll('.btn-p, .btn-xl').forEach(b => b.style.display = 'none');
@@ -2357,7 +2391,8 @@ async function actualizarLive() {
   // Filtrar por mes actual del formulario, usando el ciclo de facturación de
   // la tarjeta (día 23 en adelante ya es del mes siguiente) — ver mesAppParaFecha().
   const mesActual = document.getElementById('mes-input')?.value || '';
-  liveData = mesActual ? items.filter(i => mesAppParaFecha(i.fecha) === mesActual) : items;
+  const gastosReales = items.filter(i => !esPersonaPrestamo(i.persona));
+  liveData = mesActual ? gastosReales.filter(i => mesAppParaFecha(i.fecha) === mesActual) : gastosReales;
 
   // Fusionar automáticamente los gastos nuevos de tarjeta (sin duplicar)
   mergeTarjetasDesdeSheet(liveData);
@@ -2555,6 +2590,9 @@ function mergeTarjetasDesdeSheet(items) {
   let corregidos = 0;
   let huboPersonal = false;
   items.forEach(item => {
+    // Préstamos de tarjeta (y sus pagos) viven en el mismo log pero NO son gasto
+    // de la familia: se llevan aparte en la pestaña Préstamos.
+    if (esPersonaPrestamo(item.persona)) return;
     const nuevoItem = {desc: item.desc, monto: item.monto, cuotas: item.cuotas || '1/1', fecha: item.fecha};
     // Si la persona es Felipe o Fran, es un gasto PERSONAL (no del pozo común de tarjetas),
     // aunque se haya pagado con una tarjeta — va a su sección propia.
@@ -2604,6 +2642,154 @@ function mergeTarjetasDesdeSheet(items) {
     recalc();
   }
   return {nuevos, corregidos};
+}
+
+// ═══════════════════════════════════════════════════
+// PRÉSTAMOS DE TARJETA
+// ═══════════════════════════════════════════════════
+// Alguien usa tu tarjeta para comprar con descuento y después te devuelve la
+// plata. Se guarda en el MISMO log de la Sheet (Hoja 1), así el formulario del
+// celular puede agregarlos sin tocar el Apps Script:
+//   persona = "Préstamo"       → descripcion "Nombre | detalle", monto = lo prestado
+//   persona = "Pago préstamo"  → descripcion "Nombre | pago",    monto = lo devuelto
+// Saldo de cada persona = prestado − devuelto. Nunca entran a Tarjetas/Casa/
+// personales ni a los totales del mes (ver esPersonaPrestamo() en el merge).
+function esPersonaPrestamo(p) {
+  return p === 'Préstamo' || p === 'Pago préstamo';
+}
+
+const PR_TARJETAS = ['Banco de Chile','Santander','Scotiabank','Ripley','CMR Falabella','Scot. Cencosud'];
+let _prItems = [];   // movimientos de préstamo (préstamos y pagos) tal como están en la Sheet
+
+function prEsc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function prParseDesc(desc) {
+  const i = String(desc||'').indexOf('|');
+  if (i < 0) return {nombre: String(desc||'').trim() || '(sin nombre)', detalle: ''};
+  return {nombre: desc.slice(0,i).trim() || '(sin nombre)', detalle: desc.slice(i+1).trim()};
+}
+function prPostSheet(payload) {
+  const {script_url} = SHEETS_CFG;
+  if (!script_url) { toast('Falta configurar la Sheet', 'warn'); return false; }
+  fetch(script_url, {
+    method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload),
+  }).catch(()=>{});
+  return true;
+}
+
+async function cargarPrestamos(forzar) {
+  const sel = document.getElementById('pr-tarjeta');
+  if (sel && !sel.options.length) {
+    sel.innerHTML = PR_TARJETAS.map(t => `<option value="${prEsc(t)}">${prEsc(t)}</option>`).join('');
+  }
+  const items = await fetchSheets();
+  if (!items) {
+    if (forzar || !_prItems.length) {
+      document.getElementById('pr-lista').innerHTML =
+        '<div style="text-align:center;color:var(--R);font-size:12px;padding:20px">No se pudo leer la Sheet.</div>';
+    }
+    return;
+  }
+  _prItems = items.filter(i => esPersonaPrestamo(i.persona));
+  renderPrestamos();
+}
+
+function renderPrestamos() {
+  const porNombre = {};
+  _prItems.forEach(it => {
+    const {nombre, detalle} = prParseDesc(it.desc);
+    const key = nombre.toLowerCase();
+    const g = porNombre[key] = porNombre[key] || {nombre, prestado: 0, pagado: 0, movs: []};
+    const esPago = it.persona === 'Pago préstamo';
+    if (esPago) g.pagado += it.monto; else g.prestado += it.monto;
+    g.movs.push({...it, esPago, detalle});
+  });
+  const grupos = Object.values(porNombre).sort((a,b) => (b.prestado-b.pagado) - (a.prestado-a.pagado));
+
+  const totPrest = grupos.reduce((s,g)=>s+g.prestado,0);
+  const totPag = grupos.reduce((s,g)=>s+g.pagado,0);
+  document.getElementById('pr-tot').textContent = fmt(totPrest);
+  document.getElementById('pr-pag').textContent = fmt(totPag);
+  document.getElementById('pr-pend').textContent = fmt(Math.max(totPrest - totPag, 0));
+
+  if (!grupos.length) {
+    document.getElementById('pr-lista').innerHTML =
+      '<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">Aún no hay préstamos registrados.</div>';
+    return;
+  }
+  document.getElementById('pr-lista').innerHTML = grupos.map(g => {
+    const saldo = g.prestado - g.pagado;
+    const movs = g.movs.sort((a,b) => String(b.fecha).localeCompare(String(a.fecha))).map(m => {
+      const color = m.esPago ? 'var(--G)' : 'var(--text)';
+      const k = prEsc(JSON.stringify({f: m.fecha, d: m.desc, m: m.monto, t: m.tarjeta}));
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr);font-size:11px">
+        <div style="min-width:0">
+          <span style="color:var(--muted);font-family:var(--mono)">${prEsc(String(m.fecha).slice(0,10))}</span>
+          <span style="color:${color};margin-left:6px">${m.esPago ? '↩ Devolvió' : prEsc(m.detalle || 'Compra')}</span>
+          ${m.esPago ? '' : `<span style="background:rgba(255,255,255,.06);color:var(--muted2);font-size:9px;padding:1px 5px;border-radius:5px;margin-left:4px">${prEsc(m.tarjeta)}</span>`}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-family:var(--mono);color:${color}">${m.esPago ? '−' : ''}${fmt(m.monto)}</span>
+          <button class="btn btn-g" style="padding:2px 7px;font-size:10px" data-k="${k}" onclick="borrarPrestamo(this)" title="Borrar este movimiento">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+        <div style="font-size:14px;font-weight:800">${prEsc(g.nombre)}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${saldo>0?'var(--R)':'var(--G)'}">${saldo>0 ? 'Debe ' + fmt(saldo) : (saldo<0 ? 'A favor ' + fmt(-saldo) : 'Al día ✓')}</span>
+          <button class="btn btn-p" style="padding:4px 10px;font-size:11px" data-n="${prEsc(g.nombre)}" data-s="${Math.max(saldo,0)}" onclick="registrarPagoPrestamo(this)">Registrar pago</button>
+        </div>
+      </div>
+      ${movs}
+    </div>`;
+  }).join('');
+}
+
+function agregarPrestamo() {
+  const nombre = document.getElementById('pr-nombre').value.trim();
+  const detalle = document.getElementById('pr-detalle').value.trim();
+  const monto = parseInt(document.getElementById('pr-monto').value, 10) || 0;
+  const tarjeta = document.getElementById('pr-tarjeta').value;
+  if (!nombre) { toast('Falta el nombre', 'warn'); return; }
+  if (monto <= 0) { toast('Falta el monto', 'warn'); return; }
+  const item = {fecha: new Date().toISOString().slice(0,10), desc: nombre + ' | ' + detalle,
+    monto, tarjeta, persona: 'Préstamo', cuotas: '1/1'};
+  if (!prPostSheet({action:'add_gasto', fecha: item.fecha, tienda: item.desc, monto, tarjeta, persona: 'Préstamo', cuotas: '1/1'})) return;
+  _prItems.push(item);
+  renderPrestamos();
+  ['pr-nombre','pr-detalle','pr-monto'].forEach(id => document.getElementById(id).value = '');
+  toast('✓ Préstamo registrado', 'ok');
+  setTimeout(() => cargarPrestamos(), 3500);   // confirmar contra la Sheet
+}
+
+function registrarPagoPrestamo(btn) {
+  const nombre = btn.dataset.n, saldo = parseInt(btn.dataset.s, 10) || 0;
+  const r = prompt(`¿Cuánto devolvió ${nombre}?`, saldo || '');
+  if (r === null) return;
+  const monto = parseInt(String(r).replace(/\D/g,''), 10) || 0;
+  if (monto <= 0) { toast('Monto inválido', 'warn'); return; }
+  const item = {fecha: new Date().toISOString().slice(0,10), desc: nombre + ' | pago',
+    monto, tarjeta: 'Efectivo', persona: 'Pago préstamo', cuotas: '1/1'};
+  if (!prPostSheet({action:'add_gasto', fecha: item.fecha, tienda: item.desc, monto, tarjeta: 'Efectivo', persona: 'Pago préstamo', cuotas: '1/1'})) return;
+  _prItems.push(item);
+  renderPrestamos();
+  toast('✓ Pago registrado', 'ok');
+  setTimeout(() => cargarPrestamos(), 3500);
+}
+
+function borrarPrestamo(btn) {
+  let k; try { k = JSON.parse(btn.dataset.k); } catch(e) { return; }
+  if (!confirm('¿Borrar este movimiento?')) return;
+  if (!prPostSheet({action:'delete_gasto', fecha: k.f, tienda: k.d, monto: k.m, tarjeta: k.t})) return;
+  const i = _prItems.findIndex(x => x.fecha === k.f && x.desc === k.d && x.monto === k.m && x.tarjeta === k.t);
+  if (i >= 0) _prItems.splice(i, 1);
+  renderPrestamos();
+  setTimeout(() => cargarPrestamos(), 3500);
 }
 
 // (el auto-inicio de "en vivo" se hace mas abajo, DESPUES de sincronizar

@@ -67,8 +67,13 @@ h1 em{color:var(--F);font-style:normal}
   <input type="number" inputmode="numeric" class="monto-input" id="monto" placeholder="$0" autofocus>
 </div>
 
+<div class="section" id="sec-prestatario" style="display:none">
+  <div class="label">¿A quién se la prestaste?</div>
+  <input type="text" class="text-input" id="prestatario" placeholder="Ej: Mamá, Juan...">
+</div>
+
 <div class="section">
-  <div class="label">Tienda</div>
+  <div class="label" id="lbl-tienda">Tienda</div>
   <input type="text" class="text-input" id="tienda" placeholder="Ej: Jumbo, Uber, Falabella...">
 </div>
 
@@ -92,10 +97,11 @@ h1 em{color:var(--F);font-style:normal}
     <div class="chip" data-v="Felipe">Felipe</div>
     <div class="chip" data-v="Fran">Francisca</div>
     <div class="chip" data-v="Común">Común</div>
+    <div class="chip" data-v="Préstamo">🤝 Préstamo</div>
   </div>
 </div>
 
-<div class="section">
+<div class="section" id="sec-cuotas">
   <div class="cuotas-row">
     <div class="label" style="margin:0">Cuotas</div>
     <div class="stepper" id="stepper-cuotas">
@@ -129,8 +135,19 @@ document.querySelectorAll('#chips-persona .chip').forEach(function(c){
     document.querySelectorAll('#chips-persona .chip').forEach(function(x){ x.classList.remove('on'); });
     c.classList.add('on');
     persona = c.dataset.v;
+    aplicarModoPrestamo();
   });
 });
+
+// Préstamo: alguien usa tu tarjeta y te devuelve la plata. No es gasto de la
+// familia (la app lo lleva aparte, en la pestaña Préstamos), así que se pide
+// el nombre, la compra va como detalle y no aplica el número de cuotas.
+function aplicarModoPrestamo(){
+  var p = (persona === 'Préstamo');
+  document.getElementById('sec-prestatario').style.display = p ? 'block' : 'none';
+  document.getElementById('sec-cuotas').style.display = p ? 'none' : 'block';
+  document.getElementById('lbl-tienda').textContent = p ? '¿Qué compró? (opcional)' : 'Tienda';
+}
 
 var cuotasVal = document.getElementById('cuotas-val');
 var stepperCuotas = document.getElementById('stepper-cuotas');
@@ -162,9 +179,11 @@ function showToast(msg, type){
 function resetForm(){
   document.getElementById('monto').value = '';
   document.getElementById('tienda').value = '';
+  document.getElementById('prestatario').value = '';
   document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('on'); });
   tarjeta = null; persona = null; cuotas = 1; esMensual = false;
   cuotasVal.textContent = '1';
+  aplicarModoPrestamo();
   chipMensual.classList.remove('on');
   stepperCuotas.style.opacity = '1';
   stepperCuotas.style.pointerEvents = 'auto';
@@ -176,9 +195,12 @@ document.getElementById('submit').addEventListener('click', function(){
   var tienda = document.getElementById('tienda').value.trim();
 
   if(!monto || Number(monto) <= 0){ showToast('Falta el monto', 'err'); return; }
-  if(!tienda){ showToast('Falta la tienda', 'err'); return; }
+  var esPrestamo = (persona === 'Préstamo');
+  var prestatario = document.getElementById('prestatario').value.trim();
+  if(!esPrestamo && !tienda){ showToast('Falta la tienda', 'err'); return; }
   if(!tarjeta){ showToast('Elige una tarjeta', 'err'); return; }
   if(!persona){ showToast('Elige una persona', 'err'); return; }
+  if(esPrestamo && !prestatario){ showToast('Falta a quién se la prestaste', 'err'); return; }
 
   var btn = document.getElementById('submit');
   btn.disabled = true;
@@ -187,10 +209,10 @@ document.getElementById('submit').addEventListener('click', function(){
   var payload = {
     fecha: new Date().toISOString().slice(0,10),
     monto: Number(monto),
-    tienda: tienda,
+    tienda: esPrestamo ? (prestatario + ' | ' + tienda) : tienda,
     tarjeta: tarjeta,
     persona: persona,
-    cuotas: esMensual ? 'mensual' : ('1/' + cuotas)
+    cuotas: esPrestamo ? '1/1' : (esMensual ? 'mensual' : ('1/' + cuotas))
   };
 
   fetch(SCRIPT_URL, {
