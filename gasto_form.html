@@ -111,6 +111,7 @@ h1 em{color:var(--F);font-style:normal}
     </div>
     <div class="chip" id="chip-mensual" style="flex:0 0 auto;min-width:0;padding:10px 16px">Mensual</div>
   </div>
+  <div id="hint-prestamo" style="display:none;font-size:12px;color:var(--muted2);margin-top:8px;padding:0 4px">En préstamo, el monto es el <b>total</b> de la compra; se divide en las cuotas que elijas.</div>
 </div>
 
 <button class="submit-btn" id="submit">Guardar gasto</button>
@@ -145,7 +146,10 @@ document.querySelectorAll('#chips-persona .chip').forEach(function(c){
 function aplicarModoPrestamo(){
   var p = (persona === 'Préstamo');
   document.getElementById('sec-prestatario').style.display = p ? 'block' : 'none';
-  document.getElementById('sec-cuotas').style.display = p ? 'none' : 'block';
+  // Las cuotas siguen disponibles; solo se oculta 'Mensual' (un préstamo no se repite)
+  if (p && esMensual) { chipMensual.click(); }
+  chipMensual.style.display = p ? 'none' : '';
+  document.getElementById('hint-prestamo').style.display = p ? 'block' : 'none';
   document.getElementById('lbl-tienda').textContent = p ? '¿Qué compró? (opcional)' : 'Tienda';
 }
 
@@ -212,7 +216,7 @@ document.getElementById('submit').addEventListener('click', function(){
     tienda: esPrestamo ? (prestatario + ' | ' + tienda) : tienda,
     tarjeta: tarjeta,
     persona: persona,
-    cuotas: esPrestamo ? '1/1' : (esMensual ? 'mensual' : ('1/' + cuotas))
+    cuotas: (esMensual && !esPrestamo) ? 'mensual' : ('1/' + cuotas)
   };
 
   fetch(SCRIPT_URL, {

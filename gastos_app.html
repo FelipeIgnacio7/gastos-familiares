@@ -444,6 +444,7 @@ input,select,button{font-family:var(--sans)}
       <input id="pr-detalle" class="pr-inp" placeholder="¿Qué compró? (ej: Sodimac)" style="flex:2 1 180px">
       <input id="pr-monto" class="pr-inp" type="number" inputmode="numeric" placeholder="Monto" style="flex:1 1 100px">
       <select id="pr-tarjeta" class="pr-inp" style="flex:1 1 140px"></select>
+      <select id="pr-cuotas" class="pr-inp" style="flex:1 1 110px" title="Cuotas"></select>
       <button class="btn btn-p" onclick="agregarPrestamo()">Agregar</button>
     </div>
   </div>
@@ -2669,6 +2670,12 @@ function prParseDesc(desc) {
   if (i < 0) return {nombre: String(desc||'').trim() || '(sin nombre)', detalle: ''};
   return {nombre: desc.slice(0,i).trim() || '(sin nombre)', detalle: desc.slice(i+1).trim()};
 }
+// "1/3" → 3 cuotas. En préstamos el monto guardado es el TOTAL de la compra
+// (lo que te deben), no el valor de cada cuota.
+function prNCuotas(c) {
+  const m = String(c || '').match(/^\d+\/(\d+)$/);
+  return m ? Math.max(parseInt(m[1], 10), 1) : 1;
+}
 function prPostSheet(payload) {
   const {script_url} = SHEETS_CFG;
   if (!script_url) { toast('Falta configurar la Sheet', 'warn'); return false; }
@@ -2684,6 +2691,11 @@ async function cargarPrestamos(forzar) {
   const sel = document.getElementById('pr-tarjeta');
   if (sel && !sel.options.length) {
     sel.innerHTML = PR_TARJETAS.map(t => `<option value="${prEsc(t)}">${prEsc(t)}</option>`).join('');
+  }
+  const selC = document.getElementById('pr-cuotas');
+  if (selC && !selC.options.length) {
+    selC.innerHTML = Array.from({length: 24}, (_, i) => i + 1)
+      .map(n => `<option value="${n}">${n === 1 ? '1 cuota' : n + ' cuotas'}</option>`).join('');
   }
   const items = await fetchSheets();
   if (!items) {
@@ -2730,6 +2742,7 @@ function renderPrestamos() {
           <span style="color:var(--muted);font-family:var(--mono)">${prEsc(String(m.fecha).slice(0,10))}</span>
           <span style="color:${color};margin-left:6px">${m.esPago ? '↩ Devolvió' : prEsc(m.detalle || 'Compra')}</span>
           ${m.esPago ? '' : `<span style="background:rgba(255,255,255,.06);color:var(--muted2);font-size:9px;padding:1px 5px;border-radius:5px;margin-left:4px">${prEsc(m.tarjeta)}</span>`}
+          ${(!m.esPago && prNCuotas(m.cuotas) > 1) ? `<span style="background:rgba(245,166,35,.12);color:var(--F);font-size:9px;padding:1px 5px;border-radius:5px;margin-left:2px">${prNCuotas(m.cuotas)} cuotas de ${fmt(m.monto / prNCuotas(m.cuotas))}</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-family:var(--mono);color:${color}">${m.esPago ? '−' : ''}${fmt(m.monto)}</span>
@@ -2755,11 +2768,12 @@ function agregarPrestamo() {
   const detalle = document.getElementById('pr-detalle').value.trim();
   const monto = parseInt(document.getElementById('pr-monto').value, 10) || 0;
   const tarjeta = document.getElementById('pr-tarjeta').value;
+  const nCuotas = parseInt(document.getElementById('pr-cuotas').value, 10) || 1;
   if (!nombre) { toast('Falta el nombre', 'warn'); return; }
   if (monto <= 0) { toast('Falta el monto', 'warn'); return; }
   const item = {fecha: new Date().toISOString().slice(0,10), desc: nombre + ' | ' + detalle,
-    monto, tarjeta, persona: 'Préstamo', cuotas: '1/1'};
-  if (!prPostSheet({action:'add_gasto', fecha: item.fecha, tienda: item.desc, monto, tarjeta, persona: 'Préstamo', cuotas: '1/1'})) return;
+    monto, tarjeta, persona: 'Préstamo', cuotas: '1/' + nCuotas};
+  if (!prPostSheet({action:'add_gasto', fecha: item.fecha, tienda: item.desc, monto, tarjeta, persona: 'Préstamo', cuotas: item.cuotas})) return;
   _prItems.push(item);
   renderPrestamos();
   ['pr-nombre','pr-detalle','pr-monto'].forEach(id => document.getElementById(id).value = '');
