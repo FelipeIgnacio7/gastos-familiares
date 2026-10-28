@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 18;
+const APP_VERSION = 21;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -1936,7 +1936,20 @@ function renderCatDonut(d) {
 // ═══════════════════════════════════════════════════
 // MODO VISTA (solo lectura para compartir)
 // ═══════════════════════════════════════════════════
+// En un teléfono, ofrecer la versión móvil (movil.html), que es más cómoda y
+// además nunca reescribe el resumen del mes desde el celular.
+function sugerirVersionMovil() {
+  const esTelefono = window.matchMedia('(max-width: 760px)').matches && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  if (!esTelefono) return;
+  const b = document.createElement('a');
+  b.href = 'movil.html';
+  b.style.cssText = 'display:block;background:#F5A623;color:#000;text-align:center;font-weight:800;font-size:14px;padding:12px 16px;text-decoration:none';
+  b.textContent = '📱 Abrir la versión para celular →';
+  document.body.insertAdjacentElement('afterbegin', b);
+}
+
 function initModo() {
+  sugerirVersionMovil();
   const params = new URLSearchParams(window.location.search);
   const isVista = params.get('modo') === 'vista';
   if (isVista) {
@@ -2578,8 +2591,12 @@ async function syncMesFromSheet() {
 // contra una marca de "ya importado" en localStorage) evita dos problemas:
 // duplicados en un dispositivo nuevo que reimporta algo ya presente, y gastos
 // que quedan "escondidos para siempre" si esa marca se desincroniza del dato real.
-function buscarEnLista_(lista, it) {
+// `usados`: ítems de la lista que ya calzaron con otra fila del log en esta misma
+// pasada. Sin esto, dos compras idénticas el mismo día (ej. dos "Copete bamba
+// $16.000" el 25/10) calzaban ambas con el mismo ítem y la segunda se perdía.
+function buscarEnLista_(lista, it, usados) {
   return (lista || []).find(x =>
+    !(usados && usados.has(x)) &&
     x.desc === it.desc &&
     Number(x.monto) === Number(it.monto) &&
     (!x.fecha || !it.fecha || x.fecha === it.fecha)
@@ -2590,6 +2607,7 @@ function mergeTarjetasDesdeSheet(items) {
   let nuevos = 0;
   let corregidos = 0;
   let huboPersonal = false;
+  const usados = new Set();
   items.forEach(item => {
     // Préstamos de tarjeta (y sus pagos) viven en el mismo log pero NO son gasto
     // de la familia: se llevan aparte en la pestaña Préstamos.
@@ -2607,8 +2625,9 @@ function mergeTarjetasDesdeSheet(items) {
       destino = (ING.tarjetas[tar] = ING.tarjetas[tar] || []);
     }
 
-    const existente = buscarEnLista_(destino, nuevoItem);
+    const existente = buscarEnLista_(destino, nuevoItem, usados);
     if (existente) {
+      usados.add(existente);
       // La Sheet es la fuente de verdad: si allá se corrigieron las cuotas
       // (p.ej. "6" → "1/6"), hay que reflejarlo acá. Antes esto no pasaba nunca,
       // porque el gasto ya estaba marcado como importado y no se volvía a mirar,
@@ -2629,6 +2648,7 @@ function mergeTarjetasDesdeSheet(items) {
     // sesión más de una vez. Ahora, si algo está en la Sheet pero no en esta
     // lista, simplemente se agrega: la Sheet manda.
     destino.push(nuevoItem);
+    usados.add(nuevoItem);
     if (esPersonal) huboPersonal = true;
     nuevos++;
   });

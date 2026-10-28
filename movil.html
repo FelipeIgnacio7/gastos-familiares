@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gastos Fam">
+<meta name="theme-color" content="#0C0D0F">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Gastos Fam</title>
+<script>
+// Misma auto-actualización que la versión PC: si version.txt es más nuevo que
+// esta copia, el teléfono está mostrando un HTML cacheado → recargar.
+// Subir APP_VERSION aquí, en gastos_app.html y en version.txt juntos.
+const APP_VERSION = 21;
+(function(){
+  try{
+    if(new URLSearchParams(location.search).get('v')) return;
+    fetch('version.txt?t=' + Date.now(), {cache:'no-store'})
+      .then(r => r.ok ? r.text() : null)
+      .then(t => {
+        const remota = parseInt((t||'').trim(), 10);
+        if(remota && remota > APP_VERSION) location.replace(location.pathname + '?v=' + remota);
+      }).catch(()=>{});
+  }catch(e){}
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C0D0F;--surf:#141518;--card:#1A1C20;--card2:#202328;
+  --bdr:#272B35;--bdr2:#3A3D48;--text:#E8EAF0;--muted:#5A5F6E;--muted2:#8D93A5;
+  --F:#F5A623;--Fr:#3ECFB2;--H:#9B72F5;--T:#4FA8F5;--G:#4ADE80;--R:#F87171;
+  --mono:'DM Mono',ui-monospace,monospace;--sans:'Syne',-apple-system,system-ui,sans-serif;
+  --top:env(safe-area-inset-top,0px);--bot:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text)}
+body{font-family:-apple-system,system-ui,sans-serif;font-size:15px;min-height:100vh;
+  padding-bottom:calc(76px + var(--bot));overscroll-behavior-y:contain}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px}
+
+/* Cabecera */
+.hdr{position:sticky;top:0;z-index:20;background:rgba(12,13,15,.92);backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);padding-top:var(--top);border-bottom:1px solid var(--bdr)}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0 8px}
+.logo{font-family:var(--sans);font-size:19px;font-weight:800;letter-spacing:-.5px}
+.logo em{color:var(--F);font-style:normal}
+.upd{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.icon-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--bdr);background:var(--card);
+  display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer}
+.icon-btn.spin span{display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mchips{display:flex;gap:6px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}
+.mchips::-webkit-scrollbar{display:none}
+.mchip{flex:0 0 auto;padding:6px 12px;border-radius:999px;border:1px solid var(--bdr);background:var(--card);
+  font-size:12px;font-weight:600;color:var(--muted2);cursor:pointer;white-space:nowrap}
+.mchip.on{background:var(--text);color:#000;border-color:var(--text)}
+.mchip .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--G);margin-left:5px;vertical-align:middle}
+
+/* Vistas */
+.view{display:none;padding:14px 0 10px}
+.view.on{display:block}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:16px;padding:16px;margin-bottom:12px}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.big{font-family:var(--mono);font-size:34px;font-weight:500;letter-spacing:-1px;margin-top:4px}
+.mono{font-family:var(--mono)}
+.sub{font-size:12px;color:var(--muted2);margin-top:4px}
+.bar{height:8px;background:var(--surf);border-radius:99px;overflow:hidden;margin-top:12px}
+.bar > div{height:100%;border-radius:99px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;font-size:14px}
+.row + .row{border-top:1px solid var(--bdr)}
+.row .k{color:var(--muted2)}
+.row .v{font-family:var(--mono)}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.duo .card{margin:0;padding:14px}
+.pname{font-family:var(--sans);font-weight:800;font-size:15px}
+.pdisp{font-family:var(--mono);font-size:22px;margin:6px 0 2px;letter-spacing:-.5px}
+.mini{display:flex;justify-content:space-between;font-size:12px;color:var(--muted2);padding-top:6px}
+.mini b{font-family:var(--mono);font-weight:400;color:var(--text)}
+.sec-title{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 8px}
+.sec-title h3{font-family:var(--sans);font-size:15px;font-weight:800}
+.sec-title a{font-size:12px;color:var(--T);cursor:pointer}
+.hb{margin:10px 0}
+.hb-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.hb-top span:last-child{font-family:var(--mono)}
+.hb-track{height:7px;background:var(--surf);border-radius:99px;overflow:hidden}
+.hb-track div{height:100%;border-radius:99px}
+.it{display:flex;align-items:center;gap:10px;padding:10px 0}
+.it + .it{border-top:1px solid var(--bdr)}
+.it-main{flex:1;min-width:0}
+.it-desc{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it-meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.it-m{font-family:var(--mono);font-size:14px;white-space:nowrap}
+.tag{font-size:10px;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.06);color:var(--muted2)}
+.tag.c{background:rgba(245,166,35,.13);color:var(--F)}
+.tag.n{background:rgba(74,222,128,.13);color:var(--G)}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:24px 8px}
+
+/* Gastos */
+.seg{display:flex;background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:3px;gap:2px;margin-bottom:10px;overflow-x:auto}
+.seg button{flex:1;border:none;background:none;padding:8px 6px;border-radius:9px;font-size:12px;font-weight:700;color:var(--muted2);white-space:nowrap;cursor:pointer}
+.seg button.on{background:var(--card2);color:var(--text)}
+.search{width:100%;background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:11px 14px;font-size:15px;outline:none;margin-bottom:10px}
+.search::placeholder{color:var(--muted)}
+.grp{background:var(--card);border:1px solid var(--bdr);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.grp-h{display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer}
+.grp-h .n{flex:1;font-weight:700;font-size:14px}
+.grp-h .c{font-size:11px;color:var(--muted)}
+.grp-h .t{font-family:var(--mono);font-size:14px}
+.grp-h .chev{color:var(--muted);transition:.15s;font-size:12px}
+.grp.open .chev{transform:rotate(90deg)}
+.grp-b{display:none;padding:0 14px 6px;border-top:1px solid var(--bdr)}
+.grp.open .grp-b{display:block}
+.total-line{display:flex;justify-content:space-between;font-size:13px;color:var(--muted2);margin:2px 2px 10px}
+.total-line b{font-family:var(--mono);color:var(--text);font-weight:400}
+
+/* Formulario */
+.monto-box{background:var(--card);border:1px solid var(--bdr);border-radius:16px;padding:16px;text-align:center;margin-bottom:14px}
+.monto-inp{background:none;border:none;font-size:40px;font-weight:500;width:100%;text-align:center;font-family:var(--mono);outline:none}
+.monto-inp::placeholder{color:var(--muted)}
+.fsec{margin-bottom:14px}
+.fsec .lbl{margin:0 2px 8px}
+.txt{width:100%;background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:13px 14px;font-size:16px;outline:none}
+.txt:focus{border-color:var(--bdr2)}
+.txt::placeholder{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{flex:1 1 auto;min-width:76px;background:var(--card);border:1px solid var(--bdr);border-radius:11px;padding:12px 8px;
+  text-align:center;font-size:13px;font-weight:700;color:var(--muted2);cursor:pointer;user-select:none}
+.chip.on{background:var(--F);color:#000;border-color:var(--F)}
+.stepper-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:10px 14px}
+.stepper{display:flex;align-items:center;gap:14px;margin-left:auto}
+.step{width:36px;height:36px;border-radius:10px;background:var(--card2);border:1px solid var(--bdr2);font-size:18px;font-weight:700;cursor:pointer}
+.step-v{font-family:var(--mono);font-size:17px;min-width:22px;text-align:center}
+.hint{font-size:12px;color:var(--muted2);margin-top:8px;padding:0 2px;line-height:1.4}
+.primary{width:100%;background:var(--F);color:#000;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:800;cursor:pointer;margin-top:4px}
+.primary:disabled{opacity:.5}
+.btn-sm{border:1px solid var(--bdr2);background:var(--card2);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-sm.p{background:var(--F);border-color:var(--F);color:#000}
+.trash{border:none;background:none;color:var(--muted);font-size:15px;padding:4px 2px;cursor:pointer}
+
+/* Historial */
+.hm{cursor:pointer}
+.hm-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.hm-top .n{font-weight:800;font-family:var(--sans)}
+.stack{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--surf)}
+.stack div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--muted2);margin:0 2px 12px}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+
+/* Barra inferior */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(20,21,24,.94);backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);border-top:1px solid var(--bdr);padding-bottom:var(--bot)}
+.tabbar .in{max-width:560px;margin:0 auto;display:flex}
+.tb{flex:1;border:none;background:none;padding:8px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  color:var(--muted);font-size:10px;font-weight:700;cursor:pointer}
+.tb .ic{font-size:20px;line-height:1.1;filter:grayscale(1) opacity(.6)}
+.tb.on{color:var(--text)}
+.tb.on .ic{filter:none}
+.tb.add .ic{width:44px;height:30px;border-radius:10px;background:var(--F);display:flex;align-items:center;justify-content:center;
+  color:#000;font-weight:800;font-size:22px;filter:none}
+
+/* Toast y hoja modal */
+.toast{position:fixed;left:16px;right:16px;bottom:calc(88px + var(--bot));z-index:60;max-width:528px;margin:0 auto;
+  background:var(--card2);border:1px solid var(--bdr2);border-radius:12px;padding:13px 16px;text-align:center;
+  font-size:14px;font-weight:700;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none}
+.toast.show{opacity:1;transform:none}
+.toast.ok{border-color:var(--G);color:var(--G)}
+.toast.err{border-color:var(--R);color:var(--R)}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:70;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);border:1px solid var(--bdr);border-radius:18px 18px 0 0;width:100%;max-width:560px;
+  padding:18px 16px calc(18px + var(--bot))}
+.sheet h4{font-family:var(--sans);font-size:16px;margin-bottom:12px}
+.sheet .btns{display:flex;gap:8px;margin-top:12px}
+.sheet .btns button{flex:1;padding:14px;border-radius:12px;font-weight:800;border:1px solid var(--bdr2);background:var(--card2);cursor:pointer}
+.sheet .btns .ok{background:var(--F);border-color:var(--F);color:#000}
+.foot{text-align:center;font-size:12px;color:var(--muted);padding:18px 0 4px}
+.foot a{color:var(--T)}
+.err-box{border-color:rgba(248,113,113,.4);color:var(--R);font-size:13px}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="wrap">
+    <div class="hdr-row">
+      <div>
+        <div class="logo">Gastos <em>Fam</em></div>
+        <div class="upd" id="upd">Cargando…</div>
+      </div>
+      <button class="icon-btn" id="btn-ref" onclick="cargar(true)" aria-label="Actualizar"><span>↻</span></button>
+    </div>
+    <div class="mchips" id="mchips"></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ═══ RESUMEN ═══ -->
+  <section class="view on" id="v-resumen"><div class="empty">Cargando datos…</div></section>
+
+  <!-- ═══ GASTOS ═══ -->
+  <section class="view" id="v-gastos">
+    <div class="seg" id="seg-filtro">
+      <button data-f="todos" class="on">Todos</button>
+      <button data-f="Común">Común</button>
+      <button data-f="Casa">Casa</button>
+      <button data-f="Felipe">Felipe</button>
+      <button data-f="Fran">Fran</button>
+    </div>
+    <input class="search" id="busca" type="search" placeholder="Buscar gasto…" autocomplete="off">
+    <div class="seg" id="seg-agrupar" style="margin-bottom:12px">
+      <button data-a="cat" class="on">Por categoría</button>
+      <button data-a="tar">Por tarjeta</button>
+      <button data-a="lista">Lista</button>
+    </div>
+    <div id="g-total" class="total-line"></div>
+    <div id="g-lista"></div>
+  </section>
+
+  <!-- ═══ AGREGAR ═══ -->
+  <section class="view" id="v-agregar">
+    <div class="monto-box">
+      <input class="monto-inp" id="f-monto" type="number" inputmode="numeric" placeholder="$0">
+    </div>
+    <div class="fsec" id="f-sec-prest" style="display:none">
+      <div class="lbl">¿A quién se la prestaste?</div>
+      <input class="txt" id="f-prest" type="text" placeholder="Ej: Mamá, Juan…">
+    </div>
+    <div class="fsec">
+      <div class="lbl" id="f-lbl-tienda">Tienda</div>
+      <input class="txt" id="f-tienda" type="text" placeholder="Ej: Jumbo, Uber, Copec…" autocomplete="off">
+    </div>
+    <div class="fsec">
+      <div class="lbl">Tarjeta</div>
+      <div class="chips" id="f-tarjetas"></div>
+    </div>
+    <div class="fsec">
+      <div class="lbl">Persona</div>
+      <div class="chips" id="f-personas">
+        <div class="chip" data-v="Felipe">Felipe</div>
+        <div class="chip" data-v="Fran">Francisca</div>
+        <div class="chip" data-v="Común">Común</div>
+        <div class="chip" data-v="Préstamo">🤝 Préstamo</div>
+      </div>
+    </div>
+    <div class="fsec">
+      <div class="stepper-row">
+        <div class="lbl" style="margin:0">Cuotas</div>
+        <div class="stepper" id="f-stepper">
+          <button class="step" id="f-menos">−</button>
+          <div class="step-v" id="f-cuotas">1</div>
+          <button class="step" id="f-mas">+</button>
+        </div>
+        <div class="chip" id="f-mensual" style="flex:0 0 auto;min-width:0;padding:9px 12px">Mensual</div>
+      </div>
+      <div class="hint" id="f-hint-prest" style="display:none">En préstamo, el monto es el <b>total</b> de la compra; se divide en las cuotas que elijas.</div>
+    </div>
+    <div class="fsec">
+      <div class="lbl">Fecha</div>
+      <input class="txt" id="f-fecha" type="date">
+      <div class="hint" id="f-ciclo"></div>
+    </div>
+    <button class="primary" id="f-guardar">Guardar gasto</button>
+  </section>
+
+  <!-- ═══ PRÉSTAMOS ═══ -->
+  <section class="view" id="v-prestamos"></section>
+
+  <!-- ═══ HISTORIAL ═══ -->
+  <section class="view" id="v-historial"></section>
+
+  <div class="foot">Para editar Casa, sueldos o cerrar el mes usa la <a href="gastos_app.html">versión PC</a>.</div>
+</main>
+
+<nav class="tabbar"><div class="in">
+  <button class="tb on" data-t="resumen"><span class="ic">🏠</span>Resumen</button>
+  <button class="tb" data-t="gastos"><span class="ic">🧾</span>Gastos</button>
+  <button class="tb add" data-t="agregar"><span class="ic">+</span>Agregar</button>
+  <button class="tb" data-t="prestamos"><span class="ic">🤝</span>Préstamos</button>
+  <button class="tb" data-t="historial"><span class="ic">📊</span>Historial</button>
+</div></nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// VERSIÓN TELÉFONO — solo LEE la Sheet y AGREGA gastos al log (Hoja 1).
+// Nunca llama a save_mes: así un celular con datos viejos jamás puede pisar el
+// resumen del mes (MesActual), que es lo que dejaba los gastos "pegados".
+// Los gastos recién agregados que la versión PC aún no fusiona al resumen se
+// muestran igual (marcados "nuevo"), con la misma lógica que mergeTarjetasDesdeSheet().
+// ═══════════════════════════════════════════════════════════════════════════
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwmvbI8DkfNzp_8Clb248cK51X-ib3-_EHvti3j_K1mtdfMYqYYDwMQHWyFtyQqCN-Z3A/exec';
+const TC_USD = 977;   // mismo tipo de cambio por defecto que la versión PC
+const TARJETAS = ['Banco de Chile','Santander','Scotiabank','Ripley','CMR Falabella','Scot. Cencosud','Débito','Efectivo'];
+const TARJETAS_PREST = ['Banco de Chile','Santander','Scotiabank','Ripley','CMR Falabella','Scot. Cencosud'];
+const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const COL = {Felipe:'var(--F)', Fran:'var(--Fr)', Casa:'var(--H)', 'Común':'var(--T)'};
+const CAT_COLORS = ['#F5A623','#4FA8F5','#9B72F5','#3ECFB2','#F87171','#4ADE80','#F472B6','#FACC15','#60A5FA','#A3A3A3'];
+
+let DATA = null, RAW = [], MESES = [], MESES_REALES = [], MES = null, TAB = 'resumen';
+let FILTRO = 'todos', AGRUPAR = 'cat', BUSCA = '';
+const ABIERTOS = new Set();
+
+const $ = id => document.getElementById(id);
+const fmt = n => (n < 0 ? '−$' : '$') + Math.abs(Math.round(n||0)).toLocaleString('es-CL');
+const pad = n => String(n).padStart(2,'0');
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function hoyLocal(){ const d = new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+
+// "1/3" que Google Sheets convirtió en fecha → volver a N/T (igual que la PC)
+function normalizarCuotas(v){
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  return m ? parseInt(m[3],10) + '/' + parseInt(m[2],10) : s;
+}
+// Ciclo de facturación: del día 24 en adelante el gasto cuenta para el mes siguiente.
+function mesAppParaFecha(f){
+  const m = String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  let a = +m[1], i = +m[2]-1;
+  if (+m[3] >= 24){ i++; if (i > 11){ i = 0; a++; } }
+  return MESES_NOMBRES[i] + ' ' + a;
+}
+function mesOrden(nombre){
+  const [n, a] = String(nombre).trim().split(/\s+/);
+  const i = MESES_NOMBRES.findIndex(x => x.toLowerCase() === String(n).toLowerCase());
+  return i < 0 || !+a ? null : (+a)*12 + i;
+}
+function mesCorto(nombre){ const [n, a] = nombre.split(' '); return n.slice(0,3) + ' ' + String(a).slice(2); }
+function esPrestamo(p){ return p === 'Préstamo' || p === 'Pago préstamo'; }
+
+const CAT_MAP = [
+  ['Vivienda',          ['arriendo','ggcc','internet','luz','agua','gas','aseo']],
+  ['Auto / Transporte', ['bencina','tag','seguro auto','mantención','mantencion','uber','parking','copec','estacionamiento','permiso de circul']],
+  ['Supermercado',      ['sisa','tottus','jumbo','unimarc','verdulería','verduleria','liquidos','líquidos','lider','líder','walmart','santa isabel','express']],
+  ['Restaurantes',      ['niu sushi','niusushi','melt','restaurante','johnny','dunkin','mcdonald','sushi','pizza','completos','hamburguesa','salida a comer','café','cafe','crepes','helados']],
+  ['Belleza',           ['carisma','peluqueria','peluquería','barbería','barberia']],
+  ['Ropa',              ['studio f','paris','falabella','asics','pandora','zara','traje','zapatilla','nike','kayser']],
+  ['Salud',             ['farmacia','clínica','clinica','integramedica','seguro dental','vidakine','cruz verde']],
+  ['Entretenimiento',   ['cine','cinépolis','cinepolis','cinemark','ticketmaster','steam','karting','bamba']],
+  ['Suscripciones',     ['spotify','netflix','apple','canva','ventipay','direct tv','uber one']],
+  ['Regalos / Familia', ['regalo','natura','bath and body','perfume']],
+  ['Mascotas',          ['fernapet','superzoo','veterinaria','mascota','comida perros']],
+  ['Sorteos / Rifas',   ['tío tito','tio tito','kino']],
+  ['Telefonía',         ['entel','wom','movistar','claro']],
+  ['Tecnología',        ['aliexpress','amazon','iphone','philips','sound bar']],
+  ['Deuda / Financiero',['deuda','intereses','cae','administracion cuenta']],
+];
+function categorizar(desc){
+  const d = String(desc||'').toLowerCase();
+  for (const [cat, keys] of CAT_MAP) if (keys.some(k => d.includes(k))) return cat;
+  return 'Otros';
+}
+
+// ── Datos ──────────────────────────────────────────────────────────────────
+function parseRaw(values){
+  if (!values || values.length < 2) return [];
+  const h = values[0].map(x => String(x||'').toLowerCase().trim());
+  const ix = k => h.indexOf(k);
+  return values.slice(1).map(row => ({
+    fecha:     String(row[ix('fecha')] || '').slice(0,10),
+    desc:      String(row[ix('descripcion')] || ''),
+    monto:     parseInt(String(row[ix('monto')] ?? '0').replace(/\D/g,''), 10) || 0,
+    tarjeta:   String(row[ix('tarjeta')] || ''),
+    persona:   String(row[ix('persona')] || '') || 'Felipe',
+    cuotas:    normalizarCuotas(row[ix('cuotas')]) || '1/1',
+    categoria: String(row[ix('categoria')] || ''),
+  })).filter(r => r.monto);
+}
+
+// `usados` evita que dos compras idénticas el mismo día calcen con el mismo ítem.
+function buscarEnLista(lista, it, usados){
+  return (lista||[]).find(x => !usados.has(x) && x.desc === it.desc && Number(x.monto) === Number(it.monto) &&
+    (!x.fecha || !it.fecha || x.fecha === it.fecha)) || null;
+}
+
+// Mes "estimado": el log ya tiene gastos de un ciclo nuevo (ej. Noviembre desde
+// el 24/10) pero todavía nadie cerró el mes anterior en la PC, así que no existe
+// en la Sheet. Se arma con sueldos y Casa del último mes real + gastos marcados
+// "mensual"; las cuotas recién aparecen cuando la PC cierre el mes.
+function baseEstimada(){
+  const ult = DATA.meses[MESES_REALES[MESES_REALES.length - 1]] || {};
+  const mensual = a => (Array.isArray(a) ? a : []).filter(i => String(i.cuotas).toLowerCase() === 'mensual');
+  const tarjetas = {};
+  Object.entries(ult.tarjetas || {}).forEach(([k, a]) => { tarjetas[k] = mensual(a); });
+  return {sueldo_felipe: ult.sueldo_felipe, sueldo_fran: ult.sueldo_fran, casa: ult.casa,
+    felipe: mensual(ult.felipe), fran: mensual(ult.fran), usd: [], tarjetas};
+}
+
+function vistaMes(mes){
+  const estimado = !(DATA.meses && DATA.meses[mes]);
+  const base = estimado ? baseEstimada() : DATA.meses[mes];
+  const cl = a => (Array.isArray(a) ? a : []).map(x => ({...x}));
+  const v = {mes, sf: +base.sueldo_felipe || 0, sfr: +base.sueldo_fran || 0,
+    felipe: cl(base.felipe), fran: cl(base.fran), casa: cl(base.casa), usd: cl(base.usd), tarjetas: {}};
+  Object.entries(base.tarjetas || {}).forEach(([k, a]) => { v.tarjetas[k] = cl(a); });
+
+  const raw = RAW.filter(r => !esPrestamo(r.persona) && mesAppParaFecha(r.fecha) === mes);
+  // Mes abierto: sumar lo que ya está en el log pero la PC todavía no fusionó al resumen.
+  v.estimado = estimado;
+  if (mes === DATA.mes_activo || estimado){
+    const usados = new Set();
+    raw.forEach(r => {
+      let dest;
+      if (r.persona === 'Felipe') dest = v.felipe;
+      else if (r.persona === 'Fran') dest = v.fran;
+      else { if (!r.tarjeta) return; dest = v.tarjetas[r.tarjeta] = v.tarjetas[r.tarjeta] || []; }
+      const it = {desc: r.desc, monto: r.monto, cuotas: r.cuotas, fecha: r.fecha};
+      const ya = buscarEnLista(dest, it, usados);
+      if (ya) usados.add(ya); else { it.nuevo = true; dest.push(it); usados.add(it); }
+    });
+  }
+
+  const sum = a => a.reduce((s, i) => s + (+i.monto || 0), 0);
+  v.tf = sum(v.felipe); v.tfr = sum(v.fran); v.th = sum(v.casa);
+  v.tt = Object.values(v.tarjetas).reduce((s, a) => s + sum(a), 0);
+  v.tu = v.usd.reduce((s, i) => s + (+i.usd || 0) * TC_USD, 0);
+  v.ing = v.sf + v.sfr; v.tot = v.tf + v.tfr + v.th + v.tt + v.tu; v.disp = v.ing - v.tot;
+  // Aporte proporcional al sueldo — misma fórmula que calcAporte() en la PC
+  v.pf = v.ing ? v.sf / v.ing : .5; v.pfr = v.ing ? v.sfr / v.ing : .5;
+  const comunes = v.tt + v.th;
+  v.com_f = Math.round(comunes * v.pf); v.com_fr = Math.round(comunes * v.pfr);
+  v.tot_f = v.com_f + v.tf; v.tot_fr = v.com_fr + v.tfr;
+  v.dif_f = v.sf - v.tot_f; v.dif_fr = v.sfr - v.tot_fr;
+
+  // Lista plana con tarjeta/fecha/categoría (rescatadas del log cuando el resumen no las trae)
+  const porClave = new Map();
+  raw.forEach(r => { const k = r.desc + '|' + r.monto; if (!porClave.has(k)) porClave.set(k, r); });
+  const items = [];
+  const add = (arr, grupo, tarjeta) => arr.forEach(i => {
+    const r = porClave.get(i.desc + '|' + (+i.monto));
+    let cat = grupo === 'Casa' ? 'Vivienda' : categorizar(i.desc);
+    if (cat === 'Otros' && r && r.categoria) cat = r.categoria;
+    items.push({desc: i.desc, monto: +i.monto || 0, cuotas: i.cuotas || '', fecha: i.fecha || (r && r.fecha) || '',
+      grupo, tarjeta: tarjeta || (r && r.tarjeta) || 'Sin tarjeta', cat, nuevo: !!i.nuevo});
+  });
+  add(v.felipe, 'Felipe'); add(v.fran, 'Fran'); add(v.casa, 'Casa', 'Casa / fijos');
+  Object.entries(v.tarjetas).forEach(([k, a]) => add(a, 'Común', k));
+  v.usd.forEach(i => items.push({desc: i.desc, monto: (+i.usd||0) * TC_USD, cuotas: '', fecha: '', grupo: 'Común',
+    tarjeta: 'USD', cat: categorizar(i.desc), nuevo: false}));
+  v.items = items;
+  v.raw = raw;
+  return v;
+}
+
+let _cargando = false;
+async function cargar(manual){
+  if (_cargando) return;
+  _cargando = true; $('btn-ref').classList.add('spin');
+  try {
+    const res = await fetch(SCRIPT_URL + (SCRIPT_URL.includes('?') ? '&' : '?') + 't=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    DATA = data; DATA.meses = DATA.meses || {};
+    RAW = parseRaw(data.values);
+    MESES_REALES = Object.keys(DATA.meses).filter(k => mesOrden(k) !== null).sort((a, b) => mesOrden(a) - mesOrden(b));
+    const ultimoReal = MESES_REALES.length ? mesOrden(MESES_REALES[MESES_REALES.length - 1]) : -1;
+    const futuros = [...new Set(RAW.filter(r => !esPrestamo(r.persona)).map(r => mesAppParaFecha(r.fecha)))]
+      .filter(m => m && mesOrden(m) > ultimoReal).sort((a, b) => mesOrden(a) - mesOrden(b));
+    MESES = MESES_REALES.concat(futuros);
+    if (!MES || !MESES.includes(MES)) MES = MESES.includes(DATA.mes_activo) ? DATA.mes_activo : MESES[MESES.length-1];
+    const d = new Date();
+    $('upd').textContent = 'Actualizado ' + d.getHours() + ':' + pad(d.getMinutes());
+    render();
+    if (manual) toast('Datos actualizados', 'ok');
+  } catch(e) {
+    $('upd').textContent = 'Sin conexión';
+    if (!DATA) $('v-resumen').innerHTML = '<div class="card err-box">No se pudo leer la Sheet. Revisa tu conexión y toca ↻.</div>';
+    else if (manual) toast('No se pudo actualizar', 'err');
+  } finally {
+    _cargando = false; $('btn-ref').classList.remove('spin');
+  }
+}
+
+function postSheet(payload){
+  return fetch(SCRIPT_URL, {method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify(payload)});
+}
+// Refleja al tiro un gasto recién guardado, y confirma contra la Sheet unos segundos después.
+function agregarLocal(fila){
+  if (DATA && DATA.values) DATA.values.push([fila.fecha, fila.tienda, fila.monto, fila.tarjeta, fila.persona, fila.cuotas, '']);
+  RAW = parseRaw(DATA && DATA.values);
+  render();
+  setTimeout(() => cargar(false), 4000);
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render(){
+  if (!DATA) return;
+  renderMeses();
+  if (TAB === 'resumen') renderResumen();
+  if (TAB === 'gastos') renderGastos();
+  if (TAB === 'agregar') actualizarCiclo();
+  if (TAB === 'prestamos') renderPrestamos();
+  if (TAB === 'historial') renderHistorial();
+}
+
+function renderMeses(){
+  const visible = TAB === 'resumen' || TAB === 'gastos';
+  $('mchips').style.display = visible ? 'flex' : 'none';
+  if (!visible) return;
+  $('mchips').innerHTML = [...MESES].reverse().map(m =>
+    `<button class="mchip${m === MES ? ' on' : ''}" data-m="${esc(m)}">${esc(m)}${m === DATA.mes_activo ? '<span class="dot"></span>' : ''}${MESES_REALES.includes(m) ? '' : ' ·&nbsp;estimado'}</button>`).join('');
+}
+
+function personaCard(nombre, color, disp, sueldo, pct, com, pers, total){
+  return `<div class="card">
+    <div class="pname" style="color:${color}">${nombre}</div>
+    <div class="lbl" style="margin-top:8px">Le queda</div>
+    <div class="pdisp" style="color:${disp >= 0 ? 'var(--G)' : 'var(--R)'}">${fmt(disp)}</div>
+    <div class="mini"><span>Sueldo</span><b>${fmt(sueldo)}</b></div>
+    <div class="mini"><span>Comunes (${(pct*100).toFixed(0)}%)</span><b>${fmt(com)}</b></div>
+    <div class="mini"><span>Personales</span><b>${fmt(pers)}</b></div>
+    <div class="mini" style="color:var(--text)"><span>Debe poner</span><b style="color:${color}">${fmt(total)}</b></div>
+  </div>`;
+}
+
+function hbar(label, monto, total, color, extra){
+  const w = total > 0 ? Math.max(Math.min(monto / total * 100, 100), monto > 0 ? 1.5 : 0) : 0;
+  return `<div class="hb"><div class="hb-top"><span>${label}${extra || ''}</span><span>${fmt(monto)}</span></div>
+    <div class="hb-track"><div style="width:${w}%;background:${color}"></div></div></div>`;
+}
+
+function itemHTML(i, opts){
+  opts = opts || {};
+  const meta = [];
+  if (i.fecha) meta.push(`<span>${esc(i.fecha.slice(8,10) + '/' + i.fecha.slice(5,7))}</span>`);
+  if (opts.grupo !== false) meta.push(`<span class="tag" style="color:${COL[i.grupo] || 'var(--muted2)'}">${esc(i.grupo)}</span>`);
+  if (opts.tarjeta !== false && i.tarjeta && i.tarjeta !== 'Sin tarjeta' && i.grupo !== 'Casa') meta.push(`<span class="tag">${esc(i.tarjeta)}</span>`);
+  if (i.cuotas && i.cuotas !== '1/1') meta.push(`<span class="tag c">${esc(i.cuotas)}</span>`);
+  if (i.nuevo) meta.push('<span class="tag n">nuevo</span>');
+  return `<div class="it"><div class="it-main"><div class="it-desc">${esc(i.desc || '(sin descripción)')}</div>
+    <div class="it-meta">${meta.join('')}</div></div><div class="it-m">${fmt(i.monto)}</div></div>`;
+}
+
+function renderResumen(){
+  const v = vistaMes(MES);
+  const pct = v.ing ? v.tot / v.ing * 100 : 0;
+  const abierto = MES === DATA.mes_activo || v.estimado;
+
+  const cats = {};
+  v.items.forEach(i => { cats[i.cat] = (cats[i.cat] || 0) + i.monto; });
+  const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxCat = topCats.length ? topCats[0][1] : 0;
+
+  const ultimos = [...v.raw].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 6).map(r => ({
+    desc: r.desc, monto: r.monto, cuotas: r.cuotas, fecha: r.fecha, tarjeta: r.tarjeta,
+    grupo: r.persona === 'Felipe' || r.persona === 'Fran' ? r.persona : 'Común', nuevo: false}));
+  const nuevos = v.items.filter(i => i.nuevo).length;
+
+  $('v-resumen').innerHTML = `
+    ${v.estimado ? `<div class="card" style="border-color:rgba(245,166,35,.4);font-size:13px;color:var(--F);line-height:1.45">
+      <b>${esc(MES)} es un estimado.</b> Todavía no se cierra ${esc(DATA.mes_activo || 'el mes anterior')} en la versión PC.
+      Incluye los gastos nuevos, sueldos, Casa y gastos mensuales. Las cuotas aparecen al cerrar el mes.</div>` : ''}
+    <div class="card">
+      <div class="lbl">Disponible del hogar · ${esc(MES)}${abierto ? ' · en curso' : ''}</div>
+      <div class="big" style="color:${v.disp >= 0 ? 'var(--G)' : 'var(--R)'}">${fmt(v.disp)}</div>
+      <div class="sub">Gastado ${fmt(v.tot)} de ${fmt(v.ing)} · ${pct.toFixed(0)}%</div>
+      <div class="bar"><div style="width:${Math.min(pct,100)}%;background:${pct > 90 ? 'var(--R)' : pct > 75 ? 'var(--F)' : 'var(--G)'}"></div></div>
+      ${nuevos ? `<div class="sub" style="color:var(--G);margin-top:10px">Incluye ${nuevos} gasto${nuevos === 1 ? '' : 's'} nuevo${nuevos === 1 ? '' : 's'} que la versión PC aún no sincroniza.</div>` : ''}
+    </div>
+
+    <div class="duo">
+      ${personaCard('Felipe', 'var(--F)', v.dif_f, v.sf, v.pf, v.com_f, v.tf, v.tot_f)}
+      ${personaCard('Francisca', 'var(--Fr)', v.dif_fr, v.sfr, v.pfr, v.com_fr, v.tfr, v.tot_fr)}
+    </div>
+
+    <div class="sec-title"><h3>En qué se va</h3><a data-goto="gastos">Ver gastos ›</a></div>
+    <div class="card">
+      ${hbar('🏠 Casa / fijos', v.th, v.tot, 'var(--H)')}
+      ${hbar('💳 Tarjetas (común)', v.tt, v.tot, 'var(--T)')}
+      ${hbar('👤 Felipe personal', v.tf, v.tot, 'var(--F)')}
+      ${hbar('👤 Fran personal', v.tfr, v.tot, 'var(--Fr)')}
+      ${v.tu ? hbar('💵 USD', v.tu, v.tot, 'var(--G)') : ''}
+    </div>
+
+    <div class="sec-title"><h3>Top categorías</h3></div>
+    <div class="card">
+      ${topCats.map(([c, m], k) => hbar(esc(c), m, maxCat, CAT_COLORS[k % CAT_COLORS.length])).join('') || '<div class="empty">Sin gastos</div>'}
+    </div>
+
+    <div class="sec-title"><h3>Últimos movimientos</h3><a data-goto="agregar">+ Agregar</a></div>
+    <div class="card" style="padding:4px 16px">
+      ${ultimos.map(i => itemHTML(i)).join('') || '<div class="empty">Sin movimientos en el log para este mes</div>'}
+    </div>`;
+}
+
+function renderGastos(){
+  const v = vistaMes(MES);
+  const q = BUSCA.trim().toLowerCase();
+  let items = v.items.filter(i => (FILTRO === 'todos' || i.grupo === FILTRO) &&
+    (!q || i.desc.toLowerCase().includes(q) || i.tarjeta.toLowerCase().includes(q) || i.cat.toLowerCase().includes(q)));
+  const total = items.reduce((s, i) => s + i.monto, 0);
+  $('g-total').innerHTML = `<span>${items.length} gasto${items.length === 1 ? '' : 's'}</span><b>${fmt(total)}</b>`;
+
+  if (!items.length){ $('g-lista').innerHTML = '<div class="empty">No hay gastos con ese filtro.</div>'; return; }
+
+  if (AGRUPAR === 'lista'){
+    items = [...items].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || b.monto - a.monto);
+    $('g-lista').innerHTML = `<div class="card" style="padding:4px 16px">${items.map(i => itemHTML(i)).join('')}</div>`;
+    return;
+  }
+  const key = AGRUPAR === 'cat' ? 'cat' : 'tarjeta';
+  const grupos = {};
+  items.forEach(i => { (grupos[i[key]] = grupos[i[key]] || []).push(i); });
+  const orden = Object.entries(grupos).map(([n, a]) => [n, a, a.reduce((s, i) => s + i.monto, 0)]).sort((a, b) => b[2] - a[2]);
+  $('g-lista').innerHTML = orden.map(([n, a, t], k) => {
+    const id = AGRUPAR + ':' + n;
+    const filas = [...a].sort((x, y) => y.monto - x.monto).map(i => itemHTML(i, AGRUPAR === 'tar' ? {tarjeta: false} : {})).join('');
+    return `<div class="grp${ABIERTOS.has(id) ? ' open' : ''}" data-g="${esc(id)}">
+      <div class="grp-h"><span style="width:9px;height:9px;border-radius:3px;background:${CAT_COLORS[k % CAT_COLORS.length]}"></span>
+        <span class="n">${esc(n)} <span class="c">· ${a.length}</span></span>
+        <span class="t">${fmt(t)}</span><span class="chev">▶</span></div>
+      <div class="grp-b">${filas}</div></div>`;
+  }).join('');
+}
+
+// ── Agregar ────────────────────────────────────────────────────────────────
+const F = {tarjeta: null, persona: null, cuotas: 1, mensual: false};
+function initForm(){
+  $('f-tarjetas').innerHTML = TARJETAS.map(t => `<div class="chip" data-v="${esc(t)}">${t === 'Scot. Cencosud' ? 'Cencosud' : esc(t)}</div>`).join('');
+  $('f-fecha').value = hoyLocal();
+  $('f-tarjetas').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    $('f-tarjetas').querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+    F.tarjeta = c.dataset.v;
+  });
+  $('f-personas').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    $('f-personas').querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+    F.persona = c.dataset.v; modoPrestamo();
+  });
+  $('f-mas').onclick = () => { F.cuotas = Math.min(F.cuotas + 1, 48); $('f-cuotas').textContent = F.cuotas; };
+  $('f-menos').onclick = () => { F.cuotas = Math.max(F.cuotas - 1, 1); $('f-cuotas').textContent = F.cuotas; };
+  $('f-mensual').onclick = () => {
+    F.mensual = !F.mensual;
+    $('f-mensual').classList.toggle('on', F.mensual);
+    $('f-stepper').style.opacity = F.mensual ? '.35' : '1';
+    $('f-stepper').style.pointerEvents = F.mensual ? 'none' : 'auto';
+  };
+  $('f-fecha').addEventListener('change', actualizarCiclo);
+  $('f-guardar').onclick = guardarGasto;
+}
+function modoPrestamo(){
+  const p = F.persona === 'Préstamo';
+  $('f-sec-prest').style.display = p ? 'block' : 'none';
+  $('f-hint-prest').style.display = p ? 'block' : 'none';
+  $('f-lbl-tienda').textContent = p ? '¿Qué compró? (opcional)' : 'Tienda';
+  if (p && F.mensual) $('f-mensual').click();
+  $('f-mensual').style.display = p ? 'none' : '';
+}
+function actualizarCiclo(){
+  const m = mesAppParaFecha($('f-fecha').value);
+  $('f-ciclo').textContent = m ? 'Se suma al ciclo de ' + m + ' (desde el día 24 cuenta para el mes siguiente).' : '';
+}
+function resetForm(){
+  ['f-monto','f-tienda','f-prest'].forEach(id => $(id).value = '');
+  document.querySelectorAll('#f-tarjetas .chip, #f-personas .chip').forEach(c => c.classList.remove('on'));
+  Object.assign(F, {tarjeta: null, persona: null, cuotas: 1});
+  $('f-cuotas').textContent = '1';
+  if (F.mensual) $('f-mensual').click();
+  $('f-fecha').value = hoyLocal();
+  modoPrestamo(); actualizarCiclo();
+}
+async function guardarGasto(){
+  const monto = parseInt($('f-monto').value, 10) || 0;
+  const tienda = $('f-tienda').value.trim();
+  const prest = $('f-prest').value.trim();
+  const esP = F.persona === 'Préstamo';
+  const fecha = $('f-fecha').value || hoyLocal();
+  if (monto <= 0) return toast('Falta el monto', 'err');
+  if (!esP && !tienda) return toast('Falta la tienda', 'err');
+  if (!F.tarjeta) return toast('Elige una tarjeta', 'err');
+  if (!F.persona) return toast('Elige una persona', 'err');
+  if (esP && !prest) return toast('Falta a quién se la prestaste', 'err');
+  const fila = {action: 'add_gasto', fecha, monto, tienda: esP ? prest + ' | ' + tienda : tienda, tarjeta: F.tarjeta,
+    persona: F.persona, cuotas: (F.mensual && !esP) ? 'mensual' : '1/' + F.cuotas};
+  const b = $('f-guardar'); b.disabled = true; b.textContent = 'Guardando…';
+  try {
+    await postSheet(fila);
+    toast(esP ? 'Préstamo guardado ✓' : 'Gasto guardado ✓', 'ok');
+    resetForm();
+    agregarLocal(fila);
+  } catch(e) { toast('Error al guardar, revisa la conexión', 'err'); }
+  finally { b.disabled = false; b.textContent = 'Guardar gasto'; }
+}
+
+// ── Préstamos (misma convención que la PC: persona "Préstamo" / "Pago préstamo",
+//    descripción "Nombre | detalle"; el monto es el total, no la cuota) ──────
+function prParse(desc){
+  const s = String(desc || ''), i = s.indexOf('|');
+  return i < 0 ? {nombre: s.trim() || '(sin nombre)', detalle: ''} : {nombre: s.slice(0, i).trim() || '(sin nombre)', detalle: s.slice(i + 1).trim()};
+}
+function nCuotas(c){ const m = String(c||'').match(/^\d+\/(\d+)$/); return m ? Math.max(+m[1], 1) : 1; }
+function renderPrestamos(){
+  const g = {};
+  RAW.filter(r => esPrestamo(r.persona)).forEach(r => {
+    const {nombre, detalle} = prParse(r.desc);
+    const k = nombre.toLowerCase();
+    const x = g[k] = g[k] || {nombre, prestado: 0, pagado: 0, movs: []};
+    const pago = r.persona === 'Pago préstamo';
+    if (pago) x.pagado += r.monto; else x.prestado += r.monto;
+    x.movs.push({...r, pago, detalle});
+  });
+  const grupos = Object.values(g).sort((a, b) => (b.prestado - b.pagado) - (a.prestado - a.pagado));
+  const tp = grupos.reduce((s, x) => s + x.prestado, 0), tpg = grupos.reduce((s, x) => s + x.pagado, 0);
+
+  $('v-prestamos').innerHTML = `
+    <div class="card">
+      <div class="lbl">Te deben</div>
+      <div class="big" style="color:${tp - tpg > 0 ? 'var(--R)' : 'var(--G)'}">${fmt(Math.max(tp - tpg, 0))}</div>
+      <div class="sub">Prestado ${fmt(tp)} · devuelto ${fmt(tpg)}</div>
+      <div class="sub" style="margin-top:8px">No cuentan como gasto de la familia. Para registrar uno nuevo usa <b>+ Agregar</b> → 🤝 Préstamo.</div>
+    </div>
+    ${grupos.map(x => {
+      const saldo = x.prestado - x.pagado;
+      const movs = x.movs.sort((a, b) => b.fecha.localeCompare(a.fecha)).map(m => {
+        const n = nCuotas(m.cuotas);
+        const k = esc(JSON.stringify({f: m.fecha, d: m.desc, m: m.monto, t: m.tarjeta}));
+        return `<div class="it"><div class="it-main">
+          <div class="it-desc" style="color:${m.pago ? 'var(--G)' : 'var(--text)'}">${m.pago ? '↩ Devolvió' : esc(m.detalle || 'Compra')}</div>
+          <div class="it-meta"><span>${esc(m.fecha.slice(8,10) + '/' + m.fecha.slice(5,7) + '/' + m.fecha.slice(2,4))}</span>
+            ${m.pago ? '' : `<span class="tag">${esc(m.tarjeta)}</span>`}
+            ${!m.pago && n > 1 ? `<span class="tag c">${n} cuotas de ${fmt(m.monto / n)}</span>` : ''}</div></div>
+          <div class="it-m" style="color:${m.pago ? 'var(--G)' : 'var(--text)'}">${m.pago ? '−' : ''}${fmt(m.monto)}</div>
+          <button class="trash" data-del="${k}" aria-label="Borrar">🗑</button></div>`;
+      }).join('');
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div><div class="pname">${esc(x.nombre)}</div>
+            <div class="mono" style="font-size:18px;margin-top:4px;color:${saldo > 0 ? 'var(--R)' : 'var(--G)'}">${saldo > 0 ? 'Debe ' + fmt(saldo) : saldo < 0 ? 'A favor ' + fmt(-saldo) : 'Al día ✓'}</div></div>
+          <button class="btn-sm p" data-pago="${esc(x.nombre)}" data-saldo="${Math.max(saldo, 0)}">Registrar pago</button>
+        </div>
+        <div style="margin-top:6px">${movs}</div></div>`;
+    }).join('') || '<div class="empty">Aún no hay préstamos registrados.</div>'}`;
+}
+async function registrarPago(nombre, saldo){
+  const r = await pedirMonto('¿Cuánto devolvió ' + nombre + '?', saldo);
+  if (r === null) return;
+  if (r <= 0) return toast('Monto inválido', 'err');
+  const fila = {action: 'add_gasto', fecha: hoyLocal(), tienda: nombre + ' | pago', monto: r, tarjeta: 'Efectivo', persona: 'Pago préstamo', cuotas: '1/1'};
+  try { await postSheet(fila); toast('Pago registrado ✓', 'ok'); agregarLocal(fila); }
+  catch(e) { toast('Error al guardar', 'err'); }
+}
+async function borrarPrestamo(k){
+  if (!confirm('¿Borrar este movimiento?')) return;
+  try {
+    await postSheet({action: 'delete_gasto', fecha: k.f, tienda: k.d, monto: k.m, tarjeta: k.t});
+    const h = DATA.values[0].map(x => String(x||'').toLowerCase().trim());
+    const i = DATA.values.findIndex((row, n) => n > 0 && String(row[h.indexOf('fecha')]).slice(0,10) === k.f &&
+      String(row[h.indexOf('descripcion')]) === k.d && Number(String(row[h.indexOf('monto')]).replace(/\D/g,'')) === k.m);
+    if (i > 0) DATA.values.splice(i, 1);
+    RAW = parseRaw(DATA.values); render();
+    setTimeout(() => cargar(false), 4000);
+    toast('Movimiento borrado', 'ok');
+  } catch(e) { toast('Error al borrar', 'err'); }
+}
+
+// ── Historial ──────────────────────────────────────────────────────────────
+function renderHistorial(){
+  const vs = MESES.map(vistaMes).reverse();
+  const max = Math.max(1, ...vs.map(v => Math.max(v.ing, v.tot)));
+  const cerrados = vs.filter(v => !v.estimado);   // el mes estimado está incompleto
+  const prom = cerrados.length ? cerrados.reduce((s, v) => s + v.tot, 0) / cerrados.length : 0;
+  $('v-historial').innerHTML = `
+    <div class="card">
+      <div class="lbl">Gasto promedio mensual</div>
+      <div class="big">${fmt(prom)}</div>
+      <div class="sub">${cerrados.length} mes${cerrados.length === 1 ? '' : 'es'} registrados</div>
+    </div>
+    <div class="legend"><span><i style="background:var(--H)"></i>Casa</span><span><i style="background:var(--T)"></i>Tarjetas</span>
+      <span><i style="background:var(--F)"></i>Felipe</span><span><i style="background:var(--Fr)"></i>Fran</span><span><i style="background:var(--surf);border:1px solid var(--bdr2)"></i>Disponible</span></div>
+    ${vs.map((v, k) => {
+      const prev = vs[k + 1];
+      const delta = prev ? v.tot - prev.tot : 0;
+      const seg = (m, c) => m > 0 ? `<div style="width:${m / max * 100}%;background:${c}"></div>` : '';
+      return `<div class="card hm" data-mes="${esc(v.mes)}">
+        <div class="hm-top"><span class="n">${esc(v.mes)}${v.mes === DATA.mes_activo ? ' <span class="tag n">en curso</span>' : ''}${v.estimado ? ' <span class="tag c">estimado</span>' : ''}</span>
+          <span class="mono">${fmt(v.tot)}</span></div>
+        <div class="stack">${seg(v.th,'var(--H)')}${seg(v.tt + v.tu,'var(--T)')}${seg(v.tf,'var(--F)')}${seg(v.tfr,'var(--Fr)')}</div>
+        <div class="mini" style="padding-top:10px"><span>Disponible hogar</span><b style="color:${v.disp >= 0 ? 'var(--G)' : 'var(--R)'}">${fmt(v.disp)}</b></div>
+        <div class="mini"><span>Felipe / Fran les queda</span><b>${fmt(v.dif_f)} · ${fmt(v.dif_fr)}</b></div>
+        ${prev ? `<div class="mini"><span>vs ${esc(mesCorto(prev.mes))}</span><b style="color:${delta > 0 ? 'var(--R)' : 'var(--G)'}">${delta > 0 ? '+' : ''}${fmt(delta)}</b></div>` : ''}
+      </div>`;
+    }).join('')}`;
+}
+
+// ── UI general ─────────────────────────────────────────────────────────────
+function irA(t){
+  TAB = t;
+  document.querySelectorAll('.tb').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + t));
+  window.scrollTo(0, 0);
+  render();
+  if (t === 'agregar') actualizarCiclo();
+}
+let _toastT;
+function toast(msg, tipo){
+  const t = $('toast'); t.textContent = msg; t.className = 'toast show ' + (tipo || '');
+  clearTimeout(_toastT); _toastT = setTimeout(() => { t.className = 'toast'; }, 2300);
+}
+function pedirMonto(titulo, valor){
+  return new Promise(res => {
+    const bg = document.createElement('div'); bg.className = 'sheet-bg';
+    bg.innerHTML = `<div class="sheet"><h4>${esc(titulo)}</h4>
+      <input class="txt mono" type="number" inputmode="numeric" value="${valor || ''}" placeholder="$0" style="font-size:22px">
+      <div class="btns"><button data-x="0">Cancelar</button><button class="ok" data-x="1">Guardar</button></div></div>`;
+    document.body.appendChild(bg);
+    const inp = bg.querySelector('input'); setTimeout(() => inp.focus(), 50);
+    const fin = ok => { const v = parseInt(inp.value, 10) || 0; bg.remove(); res(ok ? v : null); };
+    bg.addEventListener('click', e => { if (e.target === bg) fin(false); const b = e.target.closest('[data-x]'); if (b) fin(b.dataset.x === '1'); });
+  });
+}
+
+document.querySelector('.tabbar').addEventListener('click', e => { const b = e.target.closest('.tb'); if (b) irA(b.dataset.t); });
+$('mchips').addEventListener('click', e => { const b = e.target.closest('.mchip'); if (b){ MES = b.dataset.m; render(); } });
+$('seg-filtro').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  FILTRO = b.dataset.f; $('seg-filtro').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderGastos(); });
+$('seg-agrupar').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  AGRUPAR = b.dataset.a; $('seg-agrupar').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderGastos(); });
+$('busca').addEventListener('input', e => { BUSCA = e.target.value; renderGastos(); });
+$('g-lista').addEventListener('click', e => { const h = e.target.closest('.grp-h'); if (!h) return;
+  const g = h.parentElement, id = g.dataset.g; g.classList.toggle('open'); if (g.classList.contains('open')) ABIERTOS.add(id); else ABIERTOS.delete(id); });
+$('v-resumen').addEventListener('click', e => { const a = e.target.closest('[data-goto]'); if (a) irA(a.dataset.goto); });
+$('v-historial').addEventListener('click', e => { const c = e.target.closest('[data-mes]'); if (c){ MES = c.dataset.mes; irA('resumen'); } });
+$('v-prestamos').addEventListener('click', e => {
+  const p = e.target.closest('[data-pago]'); if (p) return registrarPago(p.dataset.pago, +p.dataset.saldo || 0);
+  const d = e.target.closest('[data-del]'); if (d){ try { borrarPrestamo(JSON.parse(d.dataset.del)); } catch(_){} }
+});
+// Al volver a la app (desde otra app o al desbloquear), refrescar si pasó más de 1 minuto.
+let _ultimaCarga = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - _ultimaCarga > 60000){ _ultimaCarga = Date.now(); cargar(false); }
+});
+
+initForm();
+cargar(false).then(() => { _ultimaCarga = Date.now(); });
+</script>
+</body>
+</html>
