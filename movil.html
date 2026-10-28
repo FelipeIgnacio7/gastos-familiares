@@ -18,7 +18,7 @@
 // Misma auto-actualización que la versión PC: si version.txt es más nuevo que
 // esta copia, el teléfono está mostrando un HTML cacheado → recargar.
 // Subir APP_VERSION aquí, en gastos_app.html y en version.txt juntos.
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return;
@@ -277,7 +277,7 @@ button,input,select{font:inherit;color:inherit}
   <!-- ═══ HISTORIAL ═══ -->
   <section class="view" id="v-historial"></section>
 
-  <div class="foot">Para editar Casa, sueldos o cerrar el mes usa la <a href="gastos_app.html">versión PC</a>.</div>
+  <div class="foot">Para editar gastos ya ingresados o cerrar el mes usa la <a href="gastos_app.html">versión PC</a>.</div>
 </main>
 
 <nav class="tabbar"><div class="in">
@@ -292,9 +292,10 @@ button,input,select{font:inherit;color:inherit}
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
-// VERSIÓN TELÉFONO — solo LEE la Sheet y AGREGA gastos al log (Hoja 1).
-// Nunca llama a save_mes: así un celular con datos viejos jamás puede pisar el
-// resumen del mes (MesActual), que es lo que dejaba los gastos "pegados".
+// VERSIÓN TELÉFONO — LEE la Sheet y AGREGA gastos al log (Hoja 1). La única
+// escritura del resumen del mes (save_mes) es editar sueldos/Casa, y siempre
+// sobre datos recién leídos (ver guardarEditor): así un celular con datos viejos
+// nunca puede pisar el resumen (MesActual), que es lo que dejaba gastos "pegados".
 // Los gastos recién agregados que la versión PC aún no fusiona al resumen se
 // muestran igual (marcados "nuevo"), con la misma lógica que mergeTarjetasDesdeSheet().
 // ═══════════════════════════════════════════════════════════════════════════
@@ -583,6 +584,13 @@ function renderResumen(){
       ${v.tu ? hbar('💵 USD', v.tu, v.tot, 'var(--G)') : ''}
     </div>
 
+    ${v.estimado ? '' : `<div class="sec-title"><h3>Sueldos y Casa</h3><a data-editar="1">✏️ Editar</a></div>
+    <div class="card" style="padding:8px 16px">
+      <div class="row"><span class="k">Sueldo Felipe</span><span class="v">${fmt(v.sf)}</span></div>
+      <div class="row"><span class="k">Sueldo Francisca</span><span class="v">${fmt(v.sfr)}</span></div>
+      ${v.casa.map(i => `<div class="row"><span class="k">🏠 ${esc(i.desc)}</span><span class="v">${fmt(i.monto)}</span></div>`).join('')}
+    </div>`}
+
     <div class="sec-title"><h3>Top categorías</h3></div>
     <div class="card">
       ${topCats.map(([c, m], k) => hbar(esc(c), m, maxCat, CAT_COLORS[k % CAT_COLORS.length])).join('') || '<div class="empty">Sin gastos</div>'}
@@ -765,6 +773,88 @@ async function borrarPrestamo(k){
   } catch(e) { toast('Error al borrar', 'err'); }
 }
 
+// ── Editar sueldos y Casa ─────────────────────────────────────────────────
+// Única escritura del resumen (save_mes) que hace el celular, y de forma segura:
+// justo al guardar se vuelve a leer el mes FRESCO desde la Sheet, se cambian solo
+// sueldos y Casa, y se reenvía todo lo demás (Felipe, Fran, Tarjetas, USD) tal
+// cual está en la Sheet — nunca lo que el celular tenga en memoria. Si mientras
+// editabas alguien cambió sueldos/Casa en otro dispositivo, se avisa en vez de pisarlo.
+let ED = null;
+const firmaCasa = (m) => JSON.stringify({sf: +m.sueldo_felipe || 0, sfr: +m.sueldo_fran || 0,
+  casa: (m.casa || []).map(i => [String(i.desc || ''), +i.monto || 0])});
+
+function abrirEditor(){
+  const base = DATA.meses[MES]; if (!base) return;
+  ED = {mes: MES, firma: firmaCasa(base), casa: (base.casa || []).map(i => ({...i}))};
+  const bg = document.createElement('div'); bg.className = 'sheet-bg'; bg.id = 'ed-bg';
+  bg.innerHTML = `<div class="sheet" style="max-height:88vh;overflow-y:auto">
+    <h4>Sueldos y Casa · ${esc(MES)}</h4>
+    <div class="lbl" style="margin:4px 2px 6px">Sueldo Felipe</div>
+    <input class="txt mono" id="ed-sf" type="number" inputmode="numeric" value="${+base.sueldo_felipe || ''}">
+    <div class="lbl" style="margin:12px 2px 6px">Sueldo Francisca</div>
+    <input class="txt mono" id="ed-sfr" type="number" inputmode="numeric" value="${+base.sueldo_fran || ''}">
+    <div class="lbl" style="margin:16px 2px 6px">Casa / fijos</div>
+    <div id="ed-casa"></div>
+    <button class="btn-sm" id="ed-add" style="margin-top:4px">+ Agregar fijo</button>
+    <div class="hint">Los demás gastos del mes (Felipe, Fran, Tarjetas) no se tocan.</div>
+    <div class="btns"><button id="ed-cancel">Cancelar</button><button class="ok" id="ed-ok">Guardar</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+  renderEdCasa();
+  bg.addEventListener('click', e => { if (e.target === bg) cerrarEditor(); });
+  $('ed-cancel').onclick = cerrarEditor;
+  $('ed-add').onclick = () => { leerEdCasa(); ED.casa.push({desc: '', monto: '', cuotas: '1/1'}); renderEdCasa();
+    const ins = $('ed-casa').querySelectorAll('input[data-k="desc"]'); ins[ins.length - 1].focus(); };
+  $('ed-casa').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (!b) return;
+    leerEdCasa(); ED.casa.splice(+b.dataset.rm, 1); renderEdCasa(); });
+  $('ed-ok').onclick = guardarEditor;
+}
+function renderEdCasa(){
+  $('ed-casa').innerHTML = ED.casa.map((i, n) => `<div style="display:flex;gap:6px;margin-bottom:6px">
+    <input class="txt" data-k="desc" data-n="${n}" value="${esc(i.desc)}" placeholder="Descripción" style="flex:1.4;min-width:0;padding:11px 12px">
+    <input class="txt mono" data-k="monto" data-n="${n}" type="number" inputmode="numeric" value="${i.monto === '' ? '' : (+i.monto || 0)}" placeholder="$0" style="flex:1;min-width:0;padding:11px 12px">
+    <button class="trash" data-rm="${n}" aria-label="Quitar">✕</button></div>`).join('') || '<div class="hint">Sin gastos fijos.</div>';
+}
+function leerEdCasa(){
+  $('ed-casa').querySelectorAll('input').forEach(inp => {
+    const it = ED.casa[+inp.dataset.n];
+    it[inp.dataset.k] = inp.dataset.k === 'monto' ? (inp.value === '' ? '' : +inp.value) : inp.value;
+  });
+}
+function cerrarEditor(){ const bg = $('ed-bg'); if (bg) bg.remove(); ED = null; }
+
+async function guardarEditor(){
+  leerEdCasa();
+  const sf = parseInt($('ed-sf').value, 10) || 0, sfr = parseInt($('ed-sfr').value, 10) || 0;
+  const casa = ED.casa.filter(i => String(i.desc).trim() || +i.monto)
+    .map(i => ({...i, desc: String(i.desc).trim(), monto: +i.monto || 0, cuotas: i.cuotas || '1/1'}));
+  if (casa.some(i => !i.desc)) return toast('Falta la descripción de un fijo', 'err');
+  if (!sf && !sfr) return toast('Faltan los sueldos', 'err');
+  const btn = $('ed-ok'); btn.disabled = true; btn.textContent = 'Guardando…';
+  const mes = ED.mes;
+  try {
+    const fresco = await (await fetch(SCRIPT_URL + '?t=' + Date.now())).json();
+    const m = fresco.meses && fresco.meses[mes];
+    if (!m) throw new Error('mes no existe');
+    if (firmaCasa(m) !== ED.firma){
+      DATA = fresco; RAW = parseRaw(fresco.values); cerrarEditor(); render();
+      return toast('Alguien cambió sueldos o Casa recién. Revisa y edita de nuevo.', 'err');
+    }
+    await postSheet({action: 'save_mes', mes, sueldo_felipe: sf, sueldo_fran: sfr,
+      felipe: m.felipe || [], fran: m.fran || [], casa, usd: m.usd || [], tarjetas: m.tarjetas || {}});
+    // Confirmar que quedó guardado (el POST es no-cors: no vemos la respuesta)
+    await new Promise(r => setTimeout(r, 2500));
+    const ver = await (await fetch(SCRIPT_URL + '?t=' + Date.now())).json();
+    const ok = ver.meses && ver.meses[mes] && firmaCasa(ver.meses[mes]) === firmaCasa({sueldo_felipe: sf, sueldo_fran: sfr, casa});
+    DATA = ver; RAW = parseRaw(ver.values);
+    cerrarEditor(); render();
+    toast(ok ? 'Sueldos y Casa guardados ✓' : 'Se envió, pero no pude confirmarlo. Toca ↻ en un rato.', ok ? 'ok' : 'err');
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Guardar';
+    toast('No se pudo guardar, revisa la conexión', 'err');
+  }
+}
+
 // ── Historial ──────────────────────────────────────────────────────────────
 function renderHistorial(){
   const vs = MESES.map(vistaMes).reverse();
@@ -830,7 +920,10 @@ $('seg-agrupar').addEventListener('click', e => { const b = e.target.closest('bu
 $('busca').addEventListener('input', e => { BUSCA = e.target.value; renderGastos(); });
 $('g-lista').addEventListener('click', e => { const h = e.target.closest('.grp-h'); if (!h) return;
   const g = h.parentElement, id = g.dataset.g; g.classList.toggle('open'); if (g.classList.contains('open')) ABIERTOS.add(id); else ABIERTOS.delete(id); });
-$('v-resumen').addEventListener('click', e => { const a = e.target.closest('[data-goto]'); if (a) irA(a.dataset.goto); });
+$('v-resumen').addEventListener('click', e => {
+  const a = e.target.closest('[data-goto]'); if (a) return irA(a.dataset.goto);
+  if (e.target.closest('[data-editar]')) abrirEditor();
+});
 $('v-historial').addEventListener('click', e => { const c = e.target.closest('[data-mes]'); if (c){ MES = c.dataset.mes; irA('resumen'); } });
 $('v-prestamos').addEventListener('click', e => {
   const p = e.target.closest('[data-pago]'); if (p) return registrarPago(p.dataset.pago, +p.dataset.saldo || 0);

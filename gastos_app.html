@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -1378,6 +1378,7 @@ function recalc(){
   // (carga inicial), para no alcanzar a pisarlos con un guardado prematuro
   // antes de que terminen de llegar (pasa sobre todo con internet lento/celular).
   if (!window._cargandoDatos) {
+    window._ultimaEdicionLocal = Date.now();
     clearTimeout(window._recalcSaveTimer);
     window._recalcSaveTimer = setTimeout(() => {
       try {
@@ -2341,6 +2342,7 @@ async function fetchSheets() {
     // (actualizarLive) pueda avisar si hay un mes nuevo en otro dispositivo,
     // sin cambiar la forma en que fetchSheets() devuelve sus datos.
     window._mesActivoRemoto = data.mes_activo || null;
+    window._mesesRemotos = data.meses || null;
     const rows = data.values || [];
     if (rows.length < 2) return [];
 
@@ -2397,6 +2399,36 @@ function categorizarJS(desc) {
   return 'Otros';
 }
 
+// Sueldos y Casa ahora también se pueden editar desde movil.html. Sin esto, esta
+// pestaña seguía con los valores viejos en memoria y en su próximo autoguardado
+// (p.ej. al fusionar un gasto personal nuevo) los volvía a escribir en la Sheet,
+// deshaciendo la edición del celular. Se respeta lo que se está editando aquí:
+// no se toca nada si hubo una edición local en los últimos 15 s o si hay un campo
+// del formulario con el cursor.
+function adoptarSueldosCasaRemotos() {
+  if (!window._syncInicialListo || window._cargandoDatos) return;
+  const local = collectING();
+  const remoto = (window._mesesRemotos || {})[local.mes];
+  if (!remoto) return;
+  if (Date.now() - (window._ultimaEdicionLocal || 0) < 15000) return;
+  const act = document.activeElement;
+  if (act && /^(INPUT|TEXTAREA|SELECT)$/.test(act.tagName) && act.closest('#view-ingreso')) return;
+  const sf = Number(remoto.sueldo_felipe ?? local.sf) || 0;
+  const sfr = Number(remoto.sueldo_fran ?? local.sfr) || 0;
+  const casa = Array.isArray(remoto.casa) ? remoto.casa : local.casa;
+  const firma = a => JSON.stringify((a || []).map(i => [String(i.desc || ''), Number(i.monto) || 0]));
+  if (sf === local.sf && sfr === local.sfr && firma(casa) === firma(local.casa)) return;
+  window._cargandoDatos = true;   // re-pintar sin disparar el autoguardado
+  try {
+    ING.sf = sf; ING.sfr = sfr; ING.casa = casa.map(i => ({...i}));
+    document.getElementById('is-f').value = sf || '';
+    document.getElementById('is-fr').value = sfr || '';
+    renderRows('h', ING.casa, 'var(--H)');
+    recalc();
+    lsSave('ing_current', collectING());
+  } finally { window._cargandoDatos = false; }
+}
+
 async function actualizarLive() {
   const items = await fetchSheets();
   if (!items) return;
@@ -2408,6 +2440,9 @@ async function actualizarLive() {
   const gastosReales = items.filter(i => !esPersonaPrestamo(i.persona));
   liveData = mesActual ? gastosReales.filter(i => mesAppParaFecha(i.fecha) === mesActual) : gastosReales;
 
+  // Antes de fusionar (que puede re-guardar el mes), traer sueldos/Casa que se
+  // hayan editado en otro dispositivo, p.ej. desde la versión celular.
+  adoptarSueldosCasaRemotos();
   // Fusionar automáticamente los gastos nuevos de tarjeta (sin duplicar)
   mergeTarjetasDesdeSheet(liveData);
 
