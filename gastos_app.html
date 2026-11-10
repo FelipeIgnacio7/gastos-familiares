@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 24;
+const APP_VERSION = 25;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2388,8 +2388,31 @@ async function fetchSheets() {
 // mes activo. Los topes se guardan en este navegador (no en la Sheet).
 // ═══════════════════════════════════════════════════
 const PRES_DEF = {'Súper':200000,'Comer afuera y salidas':90000,'Compras y regalos':80000,'Bencina y parking':150000,'Suscripciones y comisiones':20000};
-function presTopes(){ try{ const v=JSON.parse(localStorage.getItem('gf_presupuesto_v1')||'null'); if(v&&typeof v==='object') return {...PRES_DEF,...v}; }catch(e){} return {...PRES_DEF}; }
-function presGuardar(t){ try{ localStorage.setItem('gf_presupuesto_v1', JSON.stringify(t)); }catch(e){} }
+// Los topes viven en la Sheet como un "mes" especial llamado Presupuesto (cada
+// rubro = una fila de Casa); ambas apps ignoran meses que no son un mes real.
+// localStorage queda solo como respaldo si la Sheet aún no responde.
+function presTopes(){
+  try{
+    const r = window._mesesRemotos && window._mesesRemotos['Presupuesto'];
+    if (r && Array.isArray(r.casa) && r.casa.length) {
+      const o = {}; r.casa.forEach(i => { if (i.desc) o[i.desc] = +i.monto || 0; });
+      return {...PRES_DEF, ...o};
+    }
+  }catch(e){}
+  try{ const v=JSON.parse(localStorage.getItem('gf_presupuesto_v1')||'null'); if(v&&typeof v==='object') return {...PRES_DEF,...v}; }catch(e){}
+  return {...PRES_DEF};
+}
+function presGuardar(t){
+  try{ localStorage.setItem('gf_presupuesto_v1', JSON.stringify(t)); }catch(e){}
+  const casa = Object.keys(t).map(k => ({desc:k, monto:+t[k]||0, cuotas:'1/1'}));
+  window._mesesRemotos = window._mesesRemotos || {};
+  window._mesesRemotos['Presupuesto'] = {sueldo_felipe:0, sueldo_fran:0, felipe:[], fran:[], casa, usd:[], tarjetas:{}};
+  try{
+    const {script_url} = SHEETS_CFG;
+    if (script_url) fetch(script_url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({action:'save_mes', mes:'Presupuesto', sueldo_felipe:0, sueldo_fran:0, felipe:[], fran:[], casa, usd:[], tarjetas:{}})}).catch(()=>{});
+  }catch(e){}
+}
 function presRubro(desc){
   const d = stripAccents(String(desc||'').toLowerCase());
   if (/bencina|copec|parking|estacionamiento/.test(d)) return 'Bencina y parking';
@@ -2432,7 +2455,7 @@ function renderPresupuesto(){
       <div style="height:8px;background:var(--surf);border-radius:99px;overflow:hidden;margin:8px 0 6px"><div style="height:100%;width:${Math.min(p,100)}%;background:${col(p)};border-radius:99px"></div></div>
       <div style="font-size:11px;color:var(--muted)">${tope-gas>=0?'Quedan '+fmt(tope-gas):'Excedido por '+fmt(gas-tope)} (${p.toFixed(0)}%)${det?' · '+det:''}</div></div>`;
   }).join('');
-  h += `<div style="font-size:11px;color:var(--muted);padding:4px 2px">Sin rubro (fijos, auto, deudas y otros): ${fmt(g.otros)}. Los topes se guardan en este navegador.</div>`;
+  h += `<div style="font-size:11px;color:var(--muted);padding:4px 2px">Sin rubro (fijos, auto, deudas y otros): ${fmt(g.otros)}. Los topes se guardan en la Sheet y se comparten con el celular.</div>`;
   document.getElementById('pres-body').innerHTML = h;
 }
 function presEditarTodo(){

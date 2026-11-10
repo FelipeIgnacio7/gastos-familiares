@@ -18,7 +18,7 @@
 // Misma auto-actualización que la versión PC: si version.txt es más nuevo que
 // esta copia, el teléfono está mostrando un HTML cacheado → recargar.
 // Subir APP_VERSION aquí, en gastos_app.html y en version.txt juntos.
-const APP_VERSION = 24;
+const APP_VERSION = 25;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return;
@@ -876,8 +876,27 @@ async function guardarEditor(){
 // Topes por rubro sobre gastos de Felipe + comunes (tarjetas) del mes elegido.
 // Sin Fran, sin Casa y sin cuotas ya comprometidas. Se guardan en este teléfono.
 const PRES_DEF = {'Súper':200000,'Comer afuera y salidas':90000,'Compras y regalos':80000,'Bencina y parking':150000,'Suscripciones y comisiones':20000};
-function presTopes(){ try{ const v = JSON.parse(localStorage.getItem('gf_presupuesto_v1') || 'null'); if (v && typeof v === 'object') return {...PRES_DEF, ...v}; }catch(e){} return {...PRES_DEF}; }
-function presGuardar(t){ try{ localStorage.setItem('gf_presupuesto_v1', JSON.stringify(t)); }catch(e){} }
+// Los topes viven en la Sheet como un "mes" especial llamado Presupuesto (cada
+// rubro = una fila de Casa); ambas apps ignoran meses que no son un mes real.
+// localStorage queda solo como respaldo si la Sheet aún no responde.
+function presTopes(){
+  try{
+    const r = DATA && DATA.meses && DATA.meses['Presupuesto'];
+    if (r && Array.isArray(r.casa) && r.casa.length) {
+      const o = {}; r.casa.forEach(i => { if (i.desc) o[i.desc] = +i.monto || 0; });
+      return {...PRES_DEF, ...o};
+    }
+  }catch(e){}
+  try{ const v = JSON.parse(localStorage.getItem('gf_presupuesto_v1') || 'null'); if (v && typeof v === 'object') return {...PRES_DEF, ...v}; }catch(e){}
+  return {...PRES_DEF};
+}
+function presGuardar(t){
+  try{ localStorage.setItem('gf_presupuesto_v1', JSON.stringify(t)); }catch(e){}
+  const casa = Object.keys(t).map(k => ({desc: k, monto: +t[k] || 0, cuotas: '1/1'}));
+  const m = {sueldo_felipe: 0, sueldo_fran: 0, felipe: [], fran: [], casa, usd: [], tarjetas: {}};
+  if (DATA) { DATA.meses = DATA.meses || {}; DATA.meses['Presupuesto'] = m; }
+  postSheet({action: 'save_mes', mes: 'Presupuesto', ...m}).catch(() => {});
+}
 function presRubro(desc){
   const d = String(desc||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if (/bencina|copec|parking|estacionamiento/.test(d)) return 'Bencina y parking';
@@ -921,7 +940,7 @@ function renderPresupuesto(){
         <div class="sub">${tope - gas >= 0 ? 'Quedan ' + fmt(tope - gas) : 'Excedido por ' + fmt(gas - tope)} · ${p.toFixed(0)}%</div>
         ${lista ? `<div class="sub" style="color:var(--muted)">${lista}</div>` : ''}</div>`;
     }).join('')}
-    <div class="hint">Cuenta tus gastos y los comunes, sin Fran ni cuotas ya comprometidas. Sin rubro (fijos, auto, deudas y otros): ${fmt(otros)}. Los topes se guardan en este teléfono.</div>`;
+    <div class="hint">Cuenta tus gastos y los comunes, sin Fran ni cuotas ya comprometidas. Sin rubro (fijos, auto, deudas y otros): ${fmt(otros)}. Los topes se guardan en la Sheet y se comparten con la PC.</div>`;
 }
 function presEditar(){
   const t = presTopes();
