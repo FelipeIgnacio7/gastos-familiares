@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 23;
+const APP_VERSION = 24;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -249,6 +249,7 @@ input,select,button{font-family:var(--sans)}
     <button class="tab on" onclick="switchView('historial',this)">📋 Historial</button>
     <button class="tab" onclick="switchView('graficos',this)">📊 Gráficos</button>
     <button class="tab" onclick="switchView('ingreso',this)">✏️ Ingresar</button>
+    <button class="tab" onclick="switchView('presupuesto',this)">💰 Presupuesto</button>
     <button class="tab" onclick="switchView('prestamos',this)">🤝 Préstamos</button>
   </div>
   <div class="hdr-actions" style="display:flex;align-items:center;gap:6px">
@@ -419,6 +420,18 @@ input,select,button{font-family:var(--sans)}
       </div>
     </div>
   </div>
+</div>
+
+<!-- ══════════ PRESUPUESTO ══════════ -->
+<div class="view" id="view-presupuesto">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:16px;font-weight:800">💰 Presupuesto del mes</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px" id="pres-sub">Topes por rubro sobre tus gastos y los comunes (sin Fran, sin cuotas ya comprometidas).</div>
+    </div>
+    <button class="btn btn-g" onclick="presEditarTodo()">✏️ Editar topes</button>
+  </div>
+  <div id="pres-body"></div>
 </div>
 
 <!-- ══════════ PRÉSTAMOS ══════════ -->
@@ -653,6 +666,7 @@ function switchView(v,btn){
   if(v==='graficos') buildCharts();
   if(v==='ingreso') recalc();
   if(v==='prestamos') cargarPrestamos();
+  if(v==='presupuesto') renderPresupuesto();
   if(v==='historial' && curMth) updateHSidebar();
 }
 
@@ -2367,6 +2381,69 @@ async function fetchSheets() {
   } catch(e) {
     return null;
   }
+}
+
+// ═══════════════════════════════════════════════════
+// PRESUPUESTO — topes por rubro sobre gastos de Felipe + comunes (tarjetas) del
+// mes activo. Los topes se guardan en este navegador (no en la Sheet).
+// ═══════════════════════════════════════════════════
+const PRES_DEF = {'Súper':200000,'Comer afuera y salidas':90000,'Compras y regalos':80000,'Bencina y parking':150000,'Suscripciones y comisiones':20000};
+function presTopes(){ try{ const v=JSON.parse(localStorage.getItem('gf_presupuesto_v1')||'null'); if(v&&typeof v==='object') return {...PRES_DEF,...v}; }catch(e){} return {...PRES_DEF}; }
+function presGuardar(t){ try{ localStorage.setItem('gf_presupuesto_v1', JSON.stringify(t)); }catch(e){} }
+function presRubro(desc){
+  const d = stripAccents(String(desc||'').toLowerCase());
+  if (/bencina|copec|parking|estacionamiento/.test(d)) return 'Bencina y parking';
+  if (/directv|direct tv|spotify|netflix|apple|canva|ventipay|uber one|flycrew|claude|administracion|comision/.test(d)) return 'Suscripciones y comisiones';
+  if (/sisa|tottus|jumbo|unimarc|verduler|liquidos|lider|walmart|santa isabel|express|bebida|hipogloss/.test(d)) return 'Súper';
+  if (/niu ?sushi|melt|restaur|johnny|dunkin|mcdonald|sushi|pizza|completos|hamburg|cafe|crepes|helados|holy moly|bamba|copete|mote|cine|ticketmaster|karting|steam/.test(d)) return 'Comer afuera y salidas';
+  if (/natura|regalo|bath and body|perfume|aliexpress|amazon|studio f|paris|falabella|asics|pandora|zara|nike|papeler/.test(d)) return 'Compras y regalos';
+  return null;
+}
+function presGastado(){
+  const items = [...(ING.felipe||[]), ...Object.values(ING.tarjetas||{}).flat()];
+  const por = {}, det = {}; let otros = 0;
+  items.forEach(i => {
+    const m = +i.monto || 0; if (!m) return;
+    const c = String(i.cuotas||'').match(/^(\d+)\/(\d+)$/);
+    if (c && +c[2] > 1) return;                       // cuota ya comprometida
+    const r = presRubro(i.desc);
+    if (!r) { otros += m; return; }
+    por[r] = (por[r]||0) + m; (det[r] = det[r]||[]).push(i);
+  });
+  return {por, det, otros};
+}
+function renderPresupuesto(){
+  const t = presTopes(), g = presGastado();
+  document.getElementById('pres-sub').textContent = (ING.mes||'Mes actual') + ' · topes por rubro sobre tus gastos y los comunes (sin Fran, sin cuotas ya comprometidas).';
+  const rubros = Object.keys(t);
+  const totTope = rubros.reduce((s,r)=>s+(+t[r]||0),0), totGas = rubros.reduce((s,r)=>s+(g.por[r]||0),0);
+  const col = p => p >= 100 ? 'var(--R)' : p >= 80 ? 'var(--F)' : 'var(--G)';
+  const pT = totTope ? totGas/totTope*100 : 0;
+  let h = `<div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:14px">
+    <div class="kpi" style="--kc:var(--T)"><div class="kpi-lbl">Gastado en rubros</div><div class="kpi-val">${fmt(totGas)}</div></div>
+    <div class="kpi" style="--kc:var(--F)"><div class="kpi-lbl">Tope total</div><div class="kpi-val">${fmt(totTope)}</div></div>
+    <div class="kpi" style="--kc:${col(pT)}"><div class="kpi-lbl">${totTope-totGas>=0?'Te queda':'Te pasaste'}</div><div class="kpi-val">${fmt(Math.abs(totTope-totGas))}</div></div></div>`;
+  h += rubros.map(r => {
+    const tope = +t[r]||0, gas = g.por[r]||0, p = tope ? gas/tope*100 : (gas?100:0);
+    const det = (g.det[r]||[]).sort((a,b)=>b.monto-a.monto).slice(0,6).map(i=>`${prEsc(i.desc)} ${fmt(i.monto)}`).join(' · ');
+    return `<div style="background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline"><b style="font-size:13px">${prEsc(r)}</b>
+        <span style="font-family:var(--mono);font-size:13px;color:${col(p)}">${fmt(gas)} <span style="color:var(--muted)">/ ${fmt(tope)}</span></span></div>
+      <div style="height:8px;background:var(--surf);border-radius:99px;overflow:hidden;margin:8px 0 6px"><div style="height:100%;width:${Math.min(p,100)}%;background:${col(p)};border-radius:99px"></div></div>
+      <div style="font-size:11px;color:var(--muted)">${tope-gas>=0?'Quedan '+fmt(tope-gas):'Excedido por '+fmt(gas-tope)} (${p.toFixed(0)}%)${det?' · '+det:''}</div></div>`;
+  }).join('');
+  h += `<div style="font-size:11px;color:var(--muted);padding:4px 2px">Sin rubro (fijos, auto, deudas y otros): ${fmt(g.otros)}. Los topes se guardan en este navegador.</div>`;
+  document.getElementById('pres-body').innerHTML = h;
+}
+function presEditarTodo(){
+  const t = presTopes(); const nt = {};
+  for (const r of Object.keys(t)) {
+    const v = prompt('Tope mensual para "' + r + '" (en pesos):', t[r]);
+    if (v === null) return;
+    const n = parseInt(String(v).replace(/\D/g,''),10);
+    nt[r] = isNaN(n) ? t[r] : n;
+  }
+  presGuardar(nt); renderPresupuesto();
 }
 
 // Categorización en JS (misma lógica que el servidor)

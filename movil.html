@@ -18,7 +18,7 @@
 // Misma auto-actualización que la versión PC: si version.txt es más nuevo que
 // esta copia, el teléfono está mostrando un HTML cacheado → recargar.
 // Subir APP_VERSION aquí, en gastos_app.html y en version.txt juntos.
-const APP_VERSION = 23;
+const APP_VERSION = 24;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return;
@@ -271,6 +271,9 @@ button,input,select{font:inherit;color:inherit}
     <button class="primary" id="f-guardar">Guardar gasto</button>
   </section>
 
+  <!-- ═══ PRESUPUESTO ═══ -->
+  <section class="view" id="v-presupuesto"></section>
+
   <!-- ═══ PRÉSTAMOS ═══ -->
   <section class="view" id="v-prestamos"></section>
 
@@ -284,6 +287,7 @@ button,input,select{font:inherit;color:inherit}
   <button class="tb on" data-t="resumen"><span class="ic">🏠</span>Resumen</button>
   <button class="tb" data-t="gastos"><span class="ic">🧾</span>Gastos</button>
   <button class="tb add" data-t="agregar"><span class="ic">+</span>Agregar</button>
+  <button class="tb" data-t="presupuesto"><span class="ic">💰</span>Presup.</button>
   <button class="tb" data-t="prestamos"><span class="ic">🤝</span>Préstamos</button>
   <button class="tb" data-t="historial"><span class="ic">📊</span>Historial</button>
 </div></nav>
@@ -501,12 +505,13 @@ function render(){
   if (TAB === 'resumen') renderResumen();
   if (TAB === 'gastos') renderGastos();
   if (TAB === 'agregar') actualizarCiclo();
+  if (TAB === 'presupuesto') renderPresupuesto();
   if (TAB === 'prestamos') renderPrestamos();
   if (TAB === 'historial') renderHistorial();
 }
 
 function renderMeses(){
-  const visible = TAB === 'resumen' || TAB === 'gastos';
+  const visible = TAB === 'resumen' || TAB === 'gastos' || TAB === 'presupuesto';
   $('mchips').style.display = visible ? 'flex' : 'none';
   if (!visible) return;
   $('mchips').innerHTML = [...MESES].reverse().map(m =>
@@ -867,6 +872,74 @@ async function guardarEditor(){
   }
 }
 
+// ── Presupuesto ────────────────────────────────────────────────────────────
+// Topes por rubro sobre gastos de Felipe + comunes (tarjetas) del mes elegido.
+// Sin Fran, sin Casa y sin cuotas ya comprometidas. Se guardan en este teléfono.
+const PRES_DEF = {'Súper':200000,'Comer afuera y salidas':90000,'Compras y regalos':80000,'Bencina y parking':150000,'Suscripciones y comisiones':20000};
+function presTopes(){ try{ const v = JSON.parse(localStorage.getItem('gf_presupuesto_v1') || 'null'); if (v && typeof v === 'object') return {...PRES_DEF, ...v}; }catch(e){} return {...PRES_DEF}; }
+function presGuardar(t){ try{ localStorage.setItem('gf_presupuesto_v1', JSON.stringify(t)); }catch(e){} }
+function presRubro(desc){
+  const d = String(desc||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if (/bencina|copec|parking|estacionamiento/.test(d)) return 'Bencina y parking';
+  if (/directv|direct tv|spotify|netflix|apple|canva|ventipay|uber one|flycrew|claude|administracion|comision/.test(d)) return 'Suscripciones y comisiones';
+  if (/sisa|tottus|jumbo|unimarc|verduler|liquidos|lider|walmart|santa isabel|express|bebida|hipogloss/.test(d)) return 'Súper';
+  if (/niu ?sushi|melt|restaur|johnny|dunkin|mcdonald|sushi|pizza|completos|hamburg|cafe|crepes|helados|holy moly|bamba|copete|mote|cine|ticketmaster|karting|steam/.test(d)) return 'Comer afuera y salidas';
+  if (/natura|regalo|bath and body|perfume|aliexpress|amazon|studio f|paris|falabella|asics|pandora|zara|nike|papeler/.test(d)) return 'Compras y regalos';
+  return null;
+}
+function renderPresupuesto(){
+  const v = vistaMes(MES), t = presTopes();
+  const por = {}, det = {}; let otros = 0;
+  v.items.filter(i => i.grupo === 'Felipe' || i.grupo === 'Común').forEach(i => {
+    if (!i.monto) return;
+    const c = String(i.cuotas || '').match(/^(\d+)\/(\d+)$/);
+    if (c && +c[2] > 1) return;
+    const r = presRubro(i.desc);
+    if (!r) { otros += i.monto; return; }
+    por[r] = (por[r] || 0) + i.monto; (det[r] = det[r] || []).push(i);
+  });
+  const rubros = Object.keys(t);
+  const totTope = rubros.reduce((s, r) => s + (+t[r] || 0), 0), totGas = rubros.reduce((s, r) => s + (por[r] || 0), 0);
+  const col = p => p >= 100 ? 'var(--R)' : p >= 80 ? 'var(--F)' : 'var(--G)';
+  const pT = totTope ? totGas / totTope * 100 : 0;
+  $('v-presupuesto').innerHTML = `
+    <div class="card">
+      <div class="lbl">${totTope - totGas >= 0 ? 'Te queda de presupuesto' : 'Te pasaste'} · ${esc(MES)}</div>
+      <div class="big" style="color:${col(pT)}">${fmt(Math.abs(totTope - totGas))}</div>
+      <div class="sub">Gastado ${fmt(totGas)} de ${fmt(totTope)} · ${pT.toFixed(0)}%</div>
+      <div class="bar"><div style="width:${Math.min(pT,100)}%;background:${col(pT)}"></div></div>
+      <button class="btn-sm" id="pres-edit" style="margin-top:12px">✏️ Editar topes</button>
+    </div>
+    ${rubros.map(r => {
+      const tope = +t[r] || 0, gas = por[r] || 0, p = tope ? gas / tope * 100 : (gas ? 100 : 0);
+      const lista = (det[r] || []).sort((a, b) => b.monto - a.monto).slice(0, 5).map(i => `${esc(i.desc)} ${fmt(i.monto)}`).join(' · ');
+      return `<div class="card" style="padding:14px">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+          <b style="font-size:14px">${esc(r)}</b>
+          <span class="mono" style="font-size:13px;color:${col(p)}">${fmt(gas)} <span style="color:var(--muted)">/ ${fmt(tope)}</span></span></div>
+        <div class="bar" style="margin-top:9px"><div style="width:${Math.min(p,100)}%;background:${col(p)}"></div></div>
+        <div class="sub">${tope - gas >= 0 ? 'Quedan ' + fmt(tope - gas) : 'Excedido por ' + fmt(gas - tope)} · ${p.toFixed(0)}%</div>
+        ${lista ? `<div class="sub" style="color:var(--muted)">${lista}</div>` : ''}</div>`;
+    }).join('')}
+    <div class="hint">Cuenta tus gastos y los comunes, sin Fran ni cuotas ya comprometidas. Sin rubro (fijos, auto, deudas y otros): ${fmt(otros)}. Los topes se guardan en este teléfono.</div>`;
+}
+function presEditar(){
+  const t = presTopes();
+  const bg = document.createElement('div'); bg.className = 'sheet-bg'; bg.id = 'pres-bg';
+  bg.innerHTML = `<div class="sheet" style="max-height:88vh;overflow-y:auto"><h4>Topes mensuales</h4>
+    ${Object.keys(t).map((r, n) => `<div class="lbl" style="margin:10px 2px 6px">${esc(r)}</div>
+      <input class="txt mono" data-r="${esc(r)}" type="number" inputmode="numeric" value="${+t[r] || ''}" placeholder="$0">`).join('')}
+    <div class="btns"><button id="pres-cancel">Cancelar</button><button class="ok" id="pres-ok">Guardar</button></div></div>`;
+  document.body.appendChild(bg);
+  const cerrar = () => bg.remove();
+  bg.addEventListener('click', e => { if (e.target === bg) cerrar(); });
+  $('pres-cancel').onclick = cerrar;
+  $('pres-ok').onclick = () => {
+    const nt = {}; bg.querySelectorAll('input[data-r]').forEach(inp => { nt[inp.dataset.r] = parseInt(inp.value, 10) || 0; });
+    presGuardar(nt); cerrar(); render(); toast('Topes guardados ✓', 'ok');
+  };
+}
+
 // ── Historial ──────────────────────────────────────────────────────────────
 function renderHistorial(){
   const vs = MESES.map(vistaMes).reverse();
@@ -936,6 +1009,7 @@ $('v-resumen').addEventListener('click', e => {
   const a = e.target.closest('[data-goto]'); if (a) return irA(a.dataset.goto);
   if (e.target.closest('[data-editar]')) abrirEditor();
 });
+$('v-presupuesto').addEventListener('click', e => { if (e.target.closest('#pres-edit')) presEditar(); });
 $('v-historial').addEventListener('click', e => { const c = e.target.closest('[data-mes]'); if (c){ MES = c.dataset.mes; irA('resumen'); } });
 $('v-prestamos').addEventListener('click', e => {
   const p = e.target.closest('[data-pago]'); if (p) return registrarPago(p.dataset.pago, +p.dataset.saldo || 0);
