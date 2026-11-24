@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -2418,13 +2418,21 @@ function presRubro(desc){
   const d = stripAccents(String(desc||'').toLowerCase());
   if (/bencina|copec|parking|estacionamiento/.test(d)) return 'Bencina y parking';
   if (/directv|direct tv|spotify|netflix|apple|canva|ventipay|uber one|flycrew|claude|administracion|comision/.test(d)) return 'Suscripciones y comisiones';
-  if (/sisa|tottus|jumbo|unimarc|verduler|liquidos|lider|walmart|santa isabel|express|bebida|hipogloss/.test(d)) return 'Súper';
+  if (/sisa|tottus|jumbo|unimarc|verduler|liquidos|lider|walmart|santa isabel|\bexpress\b|bebida|hipogloss/.test(d)) return 'Súper';
   if (/niu ?sushi|melt|restaur|johnny|dunkin|mcdonald|sushi|pizza|completos|hamburg|cafe|crepes|helados|holy moly|bamba|copete|mote|cine|ticketmaster|karting|steam/.test(d)) return 'Comer afuera y salidas';
   if (/natura|regalo|bath and body|perfume|aliexpress|amazon|studio f|paris|falabella|asics|pandora|zara|nike|papeler/.test(d)) return 'Compras y regalos';
   return null;
 }
+// Mes que mide el presupuesto: el mes activo de la Sheet (igual que el celular). ING.mes
+// es el mes del formulario "Ingresar" y puede quedar en otro mes en un navegador nuevo.
+function presMes(){
+  const act = window._mesActivoRemoto, rem = window._mesesRemotos;
+  if (act && rem && rem[act]) return {mes: act, felipe: rem[act].felipe || [], tarjetas: rem[act].tarjetas || {}};
+  return {mes: ING.mes, felipe: ING.felipe || [], tarjetas: ING.tarjetas || {}};
+}
 function presGastado(){
-  const items = [...(ING.felipe||[]), ...Object.values(ING.tarjetas||{}).flat()];
+  const pm = presMes();
+  const items = [...(pm.felipe||[]), ...Object.values(pm.tarjetas||{}).flat()];
   const por = {}, det = {}; let otros = 0;
   items.forEach(i => {
     const m = +i.monto || 0; if (!m) return;
@@ -2438,7 +2446,7 @@ function presGastado(){
 }
 function renderPresupuesto(){
   const t = presTopes(), g = presGastado();
-  document.getElementById('pres-sub').textContent = (ING.mes||'Mes actual') + ' · topes por rubro sobre tus gastos y los comunes (sin Fran, sin cuotas ya comprometidas).';
+  document.getElementById('pres-sub').textContent = (presMes().mes||'Mes actual') + ' · topes por rubro sobre tus gastos y los comunes (sin Fran, sin cuotas ya comprometidas).';
   const rubros = Object.keys(t);
   const totTope = rubros.reduce((s,r)=>s+(+t[r]||0),0), totGas = rubros.reduce((s,r)=>s+(g.por[r]||0),0);
   const col = p => p >= 100 ? 'var(--R)' : p >= 80 ? 'var(--F)' : 'var(--G)';
