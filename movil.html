@@ -18,7 +18,7 @@
 // Misma auto-actualización que la versión PC: si version.txt es más nuevo que
 // esta copia, el teléfono está mostrando un HTML cacheado → recargar.
 // Subir APP_VERSION aquí, en gastos_app.html y en version.txt juntos.
-const APP_VERSION = 25;
+const APP_VERSION = 27;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return;
@@ -901,7 +901,7 @@ function presRubro(desc){
   const d = String(desc||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if (/bencina|copec|parking|estacionamiento/.test(d)) return 'Bencina y parking';
   if (/directv|direct tv|spotify|netflix|apple|canva|ventipay|uber one|flycrew|claude|administracion|comision/.test(d)) return 'Suscripciones y comisiones';
-  if (/sisa|tottus|jumbo|unimarc|verduler|liquidos|lider|walmart|santa isabel|express|bebida|hipogloss/.test(d)) return 'Súper';
+  if (/sisa|tottus|jumbo|unimarc|verduler|liquidos|lider|walmart|santa isabel|\bexpress\b|bebida|hipogloss/.test(d)) return 'Súper';
   if (/niu ?sushi|melt|restaur|johnny|dunkin|mcdonald|sushi|pizza|completos|hamburg|cafe|crepes|helados|holy moly|bamba|copete|mote|cine|ticketmaster|karting|steam/.test(d)) return 'Comer afuera y salidas';
   if (/natura|regalo|bath and body|perfume|aliexpress|amazon|studio f|paris|falabella|asics|pandora|zara|nike|papeler/.test(d)) return 'Compras y regalos';
   return null;
