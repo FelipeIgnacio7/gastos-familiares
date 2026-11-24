@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 25;
+const APP_VERSION = 26;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -797,7 +797,8 @@ function syncHistFromSheet(data) {
     const periodo = nombreMes + ' ' + año;
     const id = año + '-' + String(mesNum).padStart(2,'0');
 
-    const tarjetas = tarjetasPorMes[id] || {};
+    const remotasT = remoto.tarjetas && Object.values(remoto.tarjetas).some(a => Array.isArray(a) && a.length) ? remoto.tarjetas : null;
+    const tarjetas = remotasT || tarjetasPorMes[id] || {};
     const sf = remoto.sueldo_felipe || 0, sfr = remoto.sueldo_fran || 0;
     const tf = (remoto.felipe||[]).reduce((s,i)=>s+(i.monto||0),0);
     const tfr = (remoto.fran||[]).reduce((s,i)=>s+(i.monto||0),0);
