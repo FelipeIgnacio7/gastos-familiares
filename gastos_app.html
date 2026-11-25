@@ -11,7 +11,7 @@
 // Auto-actualización: si version.txt en el servidor es más nuevo que esta copia,
 // el navegador está sirviendo un HTML cacheado (típico en el celular) → recargar.
 // Subir APP_VERSION y version.txt juntos en cada cambio publicado.
-const APP_VERSION = 27;
+const APP_VERSION = 28;
 (function(){
   try{
     if(new URLSearchParams(location.search).get('v')) return; // ya venimos de una recarga forzada
@@ -1449,6 +1449,7 @@ function cambiarMesEditando(nuevoMes) {
     return;
   }
   ING.mes = nuevoMes;
+  window._mesInicialRevisado = true; // elección manual: no volver a saltar
   lsSave('ing_current', ING);
   syncMesFromSheet();
 }
@@ -2656,6 +2657,14 @@ function pushMesToSheet(ingData) {
 
 // Al cargar la página: si la Sheet tiene datos guardados para el mes actual, usarlos
 // (la Sheet es la fuente de verdad para que todos los dispositivos vean lo mismo)
+// "Noviembre 2026" -> número ordenable (año*12 + mes); null si no es un mes real.
+function ordenMes_(nombre) {
+  const M = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const p = String(nombre || '').trim().toLowerCase().split(/\s+/);
+  const i = M.indexOf(p[0]), a = parseInt(p[1], 10);
+  return i < 0 || !a ? null : a * 12 + i;
+}
+
 async function syncMesFromSheet() {
   const {script_url} = SHEETS_CFG;
   if (!script_url) return;
@@ -2663,8 +2672,15 @@ async function syncMesFromSheet() {
     const res = await fetch(script_url);
     if (!res.ok) return;
     const data = await res.json();
-    checkMesActivo(data.mes_activo);
     const meses = data.meses || {};
+    // Al abrir la app: si este navegador quedó en un mes anterior al activo de la
+    // Sheet (navegador nuevo o atrasado), partir directamente en el mes activo.
+    if (!window._mesInicialRevisado) {
+      window._mesInicialRevisado = true;
+      const act = data.mes_activo, oAct = ordenMes_(act), oIng = ordenMes_(ING.mes);
+      if (act && meses[act] && oAct !== null && oIng !== null && oIng < oAct) ING.mes = act;
+    }
+    checkMesActivo(data.mes_activo);
     let mesActual = ING.mes || 'Julio 2026';
 
     // Si no está el mes exacto, intentar con distinta capitalización
